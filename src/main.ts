@@ -1,13 +1,12 @@
+import type HalloWorkerApi from './hallo-worker'
+import HalloWorker from './hallo-worker?werker'
 import type WorkerApi from './worker'
 import Worker from './worker?werker'
 
-const worker = new Worker<typeof WorkerApi>()
-
 async function testWorker() {
-  worker.on.pong(timestamp => {
-    console.log('pong', timestamp)
-    setTimeout(() => worker.ping(performance.now()), 1000)
-  })
+  const worker = new Worker<typeof WorkerApi>()
+  const halloWorker = new HalloWorker<typeof HalloWorkerApi>()
+  worker.link('hallo', halloWorker)
   worker.ping(performance.now())
 }
 

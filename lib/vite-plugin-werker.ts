@@ -9,12 +9,43 @@ export default () => {
 
         // Worker wrapper
         const code = /* javascript */ `import getApi from "${originalPath}";
-const api = getApi(new Proxy({}, {
-  get(_, property){
-    return (...data) => self.postMessage({topic: property, data})
+const workerChannels = {}
+const api = getApi(
+  new Proxy({}, {
+    get(_, property){
+      return (...data) => self.postMessage({topic: property, data})
+    }
+  }),
+  new Proxy({}, {
+    get(_, workerName){
+      return new Proxy({}, 
+        {
+          get(_, property){ 
+            return (...data) => {
+              if(!workerChannels[workerName]){
+                throw \`Missing channel "$\{workerName\}": link channels first with worker.link("$\{workerName\}", otherWorker).\`
+              }
+              workerChannels[workerName]?.postMessage({topic: property, data })
+            } 
+          }
+        }
+      )
+    }
+  }),
+)
+self.onmessage = ({data: {topic, data, name, port}}) => {
+  if(topic === 'send'){
+    workerChannels[name] = port
+    return
   }
-}))
-self.onmessage = ({data: {topic, data}}) => api[topic](...data)`
+  if(topic === 'receive'){
+    port.onmessage = ({data: {topic, data}}) => {
+      api[topic](...data)
+    }
+    return
+  }
+  api[topic](...data)
+}`
 
         return code
       }
@@ -27,12 +58,22 @@ self.onmessage = ({data: {topic, data}}) => api[topic](...data)`
 
         // Client proxy for worker
         const code = /* javascript */ `
-export default function(){
+export default function(workers){
   const eventTarget = new EventTarget()
   const worker = new Worker(new URL("${originalPath}", import.meta.url), { type: 'module' });
   worker.onmessage = ({data: {topic, data}}) => eventTarget.dispatchEvent(new CustomEvent(topic, {detail: data}))
   return new Proxy({}, {
     get(target, property) {
+      if(property === 'postMessage'){
+        return (...args) => worker.postMessage(...args)
+      }
+      if(property === 'link'){
+        return (name, otherWorker) => {
+          const channel = new MessageChannel();
+          worker.postMessage({topic: 'send', name, port: channel.port1}, [channel.port1])
+          otherWorker.postMessage({topic: 'receive', name, port: channel.port2}, [channel.port2])
+        }
+      }
       if(property === 'on'){
           return new Proxy({}, {
             get(_, property){
