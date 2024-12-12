@@ -3,11 +3,10 @@ import HalloWorker from './hallo-worker?werker'
 import type WorkerApi from './worker'
 import Worker from './worker?werker'
 
-async function testWorker() {
-  const worker = new Worker<typeof WorkerApi>()
-  const halloWorker = new HalloWorker<typeof HalloWorkerApi>()
-  worker.link('hallo', halloWorker)
-  worker.ping(performance.now())
-}
-
-testWorker().catch(console.error)
+const worker = new Worker<typeof WorkerApi>()
+const halloWorker = new HalloWorker<typeof HalloWorkerApi>()
+worker.link('hallo', halloWorker)
+worker.ping(performance.now())
+const ab = new ArrayBuffer(1024)
+worker.on.buffer(console.log)
+worker.transfer(ab).buffer(ab)

@@ -8,38 +8,53 @@ export default () => {
         const originalPath = id.replace('?worker_file&type=module', '')
 
         // Worker wrapper
-        const code = /* javascript */ `import getApi from "${originalPath}";
+        const code = /* javascript */ `import getApi from "${originalPath}"
 const workerChannels = {}
 const api = getApi(
-  new Proxy({}, {
-    get(_, property){
-      return (...data) => self.postMessage({topic: property, data})
-    }
-  }),
-  new Proxy({}, {
-    get(_, workerName){
-      return new Proxy({}, 
-        {
-          get(_, property){ 
-            return (...data) => {
-              if(!workerChannels[workerName]){
-                throw \`Missing channel "$\{workerName\}": link channels first with worker.link("$\{workerName\}", otherWorker).\`
+  new Proxy(
+    {},
+    {
+      get(_, workerName) {
+        return new Proxy(
+          {},
+          {
+            get(_, property) {
+              if (property === "transfer") {
+                return (...transferables) => {
+                  return new Proxy(
+                    {},
+                    {
+                      get(_, property) {
+                        return (...data) =>
+                          self.postMessage(
+                            { topic: property, data },
+                            transferables
+                          )
+                      },
+                    }
+                  )
+                }
               }
-              workerChannels[workerName]?.postMessage({topic: property, data })
-            } 
+              return (...data) => {
+                workerChannels[workerName]?.postMessage({
+                  topic: property,
+                  data,
+                })
+              }
+            },
           }
-        }
-      )
+        )
+      },
     }
-  }),
+  )
 )
-self.onmessage = ({data: {topic, data, name, port}}) => {
-  if(topic === 'send'){
+self.onmessage = ({ data: { topic, data, name, port } }) => {
+  if (topic === "send") {
     workerChannels[name] = port
     return
   }
-  if(topic === 'receive'){
-    port.onmessage = ({data: {topic, data}}) => {
+  if (topic === "receive") {
+    port.onmessage = ({ data: { topic, data } }) => {
       api[topic](...data)
     }
     return
@@ -67,6 +82,17 @@ export default function(workers){
       if(property === 'postMessage'){
         return (...args) => worker.postMessage(...args)
       }
+      if(property === 'transfer'){
+        return (...transferables) => {
+          return new Proxy({}, {
+            get(_, property){
+              return (...data) => {
+                worker.postMessage({topic: property, data }, transferables)
+              }
+            }
+          })
+        }
+      }
       if(property === 'link'){
         return (name, otherWorker) => {
           const channel = new MessageChannel();
@@ -85,7 +111,9 @@ export default function(workers){
             }
           })
       }
-      return (...data) => worker.postMessage({topic: property, data })
+      return (...data) => {
+        worker.postMessage({topic: property, data })
+      }
     }
   })
 }`

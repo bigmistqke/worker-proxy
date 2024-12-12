@@ -1,12 +1,20 @@
+import { TransferProps } from '../lib/types'
 import type halloWorker from './hallo-worker'
 
-export default (
-  self: { pong: (timestamp: number) => void },
-  channels: { hallo: ReturnType<typeof halloWorker> }
-) => ({
+export default ({
+  self,
+  hallo
+}: TransferProps<{
+  self: { pong(timestamp: number): void; buffer(buffer: ArrayBuffer): void }
+  hallo: ReturnType<typeof halloWorker>
+}>) => ({
   ping(timestamp: number) {
     console.log('ping', timestamp)
-    channels.hallo.hallo()
+    hallo.hallo()
     setTimeout(() => self.pong(performance.now()), 1000)
+  },
+  buffer(buffer: ArrayBuffer) {
+    console.log(buffer)
+    self.transfer(buffer).buffer(buffer)
   }
 })
