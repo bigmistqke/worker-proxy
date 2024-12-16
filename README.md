@@ -1,6 +1,6 @@
 # `@bigmistqke/vite-plugin-worker-proxy`
 
-Vite plugin to improve worker DX.
+Vite plugin to improve worker DX, similar to [ComLink](https://github.com/GoogleChromeLabs/comlink).
 
 ## Table of Contents
 
@@ -32,11 +32,12 @@ worker.log('hello', 'bigmistqke')
 ```tsx
 import { WorkerProps } from '@bigmistqke/vite-plugin-worker-proxy'
 
-export default () => ({
+// Return object of methods
+export default {
   log(...args: Array<string>) {
     console.log(...args)
   }
-})
+}
 ```
 
 ## $on
@@ -52,13 +53,13 @@ import Worker from './worker?worker-proxy'
 // Create WorkerProxy
 const worker = new Worker<typeof WorkerApi>()
 
-// Subscribe to pong-calls of worker
+// Subscribe to .pong prop-method calls of worker
 worker.$on.pong(data => {
   console.log('pong', data)
   setTimeout(() => worker.ping(performance.now()), 1000)
 })
 
-// Call ping-method of worker
+// Call .ping-method of worker
 worker.ping(performance.now())
 ```
 
@@ -67,6 +68,7 @@ worker.ping(performance.now())
 ```tsx
 import { WorkerProps } from '@bigmistqke/vite-plugin-worker-proxy'
 
+// Return a function with prop-methods
 export default (
   props: WorkerProps<{
     pong: (timestamp: number) => void
@@ -74,6 +76,8 @@ export default (
 ) => ({
   ping(timestamp: number) {
     console.log('ping', timestamp)
+
+    // Call .pong prop-method
     setTimeout(() => props.pong(performance.now()), 1000)
   }
 })
@@ -86,23 +90,23 @@ Await responses of WorkerProxy-methods with `worker.$async.method(...)`
 **main.ts**
 
 ```tsx
-import { $transfer } from '@bigmistqke/vite-plugin-worker-proxy'
 import Worker from './worker?worker-proxy'
 import type WorkerApi from './worker'
 
 const worker = new Worker<typeof WorkerApi>()
 
+// Call async version of ask-method
 worker.$async.ask('question').then(console.log)
 ```
 
 **worker.ts**
 
 ```tsx
-export default () => ({
+export default {
   ask(question: string) {
-    return new Promise(resolve => setTimeout(() => resolve('Answer'), 1000))
+    return 'Answer'
   }
-})
+}
 ```
 
 ## $transfer
@@ -123,7 +127,7 @@ const buffer = new ArrayBuffer()
 // Transfer buffer to worker
 worker.setBuffer($transfer(buffer, [buffer]))
 
-// Transfer buffer from worker back to main thread
+// Call async version of getBuffer and log awaited results
 worker.$async.getBuffer().then(console.log)
 ```
 
@@ -131,19 +135,25 @@ worker.$async.getBuffer().then(console.log)
 
 ```tsx
 let buffer: ArrayBuffer
-export default () => ({
+export default {
   setBuffer(_buffer: ArrayBuffer) {
     buffer = _buffer
   },
   getBuffer() {
+    // Transfer buffer from worker back to main thread
     return $transfer(buffer, [buffer])
   }
-})
+}
 ```
 
 ## $port
 
-Expose a WorkerProxy's API to another WorkerProxy with `worker.$port()` and `createWorkerProxy()`
+Expose a WorkerProxy's API to another WorkerProxy with `worker.$port()` and `createWorkerProxy(port)`:
+
+- `worker.$port()` returns a branded `MessagePort`:
+  - `WorkerProxyPort<T> = MessagePort & { $: T }`
+- `createWorkerProxy` accepts `Worker` and `WorkerProxyPort` as argument.
+  - When given a `WorkerProxyPort` it infers its type from the branded type.
 
 **main.ts**
 
@@ -157,10 +167,10 @@ import type GoodbyeWorkerApi from './goodbye-worker'
 const halloWorker = new HalloWorker<typeof HalloWorkerApi>()
 const goodbyeWorker = new GoodbyeWorker<typeof GoodbyeWorkerApi>()
 
-// Get a WorkerPort of goodbyeWorker
+// Get a WorkerProxyPort of goodbyeWorker
 const port = goodbyeWorker.$port()
 
-// Transfer the WorkerPort to halloWorker
+// Transfer the WorkerProxyPort to halloWorker
 halloWorker.link($transfer(port, [port]))
 
 halloWorker.hallo()
@@ -178,7 +188,7 @@ import type GoodbyeWorkerApi from './goodbye-worker'
 
 let goodbyeWorker: WorkerProxy<typeof GoodbyeWorkerApi>
 
-export default () => ({
+export default {
   hallo() {
     console.log('hallo')
     setTimeout(() => goodbyeWorker.goodbye(), 1000)
@@ -187,15 +197,15 @@ export default () => ({
     // Create WorkerProxy from the given WorkerProxyPort
     goodbyeWorker = createWorkerProxy(port)
   }
-})
+}
 ```
 
 **goodbye-worker.ts**
 
 ```tsx
-export default () => ({
+export default {
   goodbye() {
     console.log('goodbye')
   }
-})
+}
 ```

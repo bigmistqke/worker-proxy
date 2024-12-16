@@ -12,13 +12,15 @@ declare module '*?worker-proxy' {
       ...args: Parameters<T[TKey]> | [Transferable<Parameters<T[TKey]>, unknown>]
     ) => Promise<ReturnType<T[TKey]>>
   }
-  type WorkerProxy<T> = SyncMethods<ReturnType<T>> & {
-    $async: AsyncMethods<ReturnType<T>>
+  type WorkerProxy<Methods, Props> = SyncMethods<Methods> & {
+    $async: AsyncMethods<Methods>
     $on: {
-      [TKey in keyof Parameters<T>[0]]: (data: Parameters<T>[0][TKey]) => () => void
+      [TKey in keyof Props]: (data: Props[TKey]) => () => void
     }
-    $port: () => WorkerProxyPort<T>
+    $port: () => WorkerProxyPort<Methods>
   }
-  const workerApi: new <T>() => WorkerProxy<T>
+  const workerApi: new <T>() => T extends (...args: Array<any>) => infer U
+    ? WorkerProxy<U, Parameters<T>[0]>
+    : WorkerProxy<T>
   export default workerApi
 }

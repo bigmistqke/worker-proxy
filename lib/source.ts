@@ -34,9 +34,9 @@ function createProxy(callback) {
   })
 }
 
-const api = getApi(createProxy(topic =>
+const api = typeof getApi === 'function' ? getApi(createProxy(topic =>
   (...data) => postMessage(topic, data)
-))
+)) : getApi
 
 async function onMessage ({ data: { topic, data, name, port, id } }) {
   if(port){
