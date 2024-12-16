@@ -25,4 +25,4 @@ export type WorkerProxy<T extends Fn = Fn> = SyncMethods<ReturnType<T>> & {
 }
 
 /** Branded `MessagePort` */
-export type $MessagePort<T> = MessagePort & { $: T }
+export type WorkerProxyPort<T> = MessagePort & { $: T }

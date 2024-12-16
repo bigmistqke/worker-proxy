@@ -1,4 +1,4 @@
-import { $MessagePort, Fn, WorkerProxy } from './types'
+import { Fn, WorkerProxy, WorkerProxyPort } from './types'
 
 export function getWorkerSource(filePath: string) {
   return /* javascript */ `import getApi from '${filePath}'
@@ -65,7 +65,7 @@ export default function(workers){
 };`
 }
 
-export function createWorkerProxy<T extends Worker | $MessagePort<Fn>>(worker: T) {
+export function createWorkerProxy<T extends Worker | WorkerProxyPort<Fn>>(worker: T) {
   let id = 0
   const pendingMessages: Record<
     string,
@@ -114,37 +114,39 @@ export function createWorkerProxy<T extends Worker | $MessagePort<Fn>>(worker: T
     eventTarget.dispatchEvent(new CustomEvent(topic, { detail: data }))
   }
 
-  return createProxy<T extends $MessagePort<Fn> ? WorkerProxy<T['$']> : WorkerProxy<T>>(topic => {
-    if (topic === 'postMessage') {
-      return worker.postMessage.bind(worker)
-    }
-    if (topic === '$port') {
-      return () => {
-        const messageChannel = new MessageChannel()
-        worker.postMessage({ port: messageChannel.port1 }, [messageChannel.port1])
-        return messageChannel.port2
+  return createProxy<T extends WorkerProxyPort<Fn> ? WorkerProxy<T['$']> : WorkerProxy<T>>(
+    topic => {
+      if (topic === 'postMessage') {
+        return worker.postMessage.bind(worker)
       }
-    }
-    if (topic === '$async') {
-      return asyncProxy
-    }
-    if (topic === '$on') {
-      return createProxy(property => {
-        return (callback: (...data: Array<unknown>) => void) => {
-          const abortController = new AbortController()
-          eventTarget.addEventListener(
-            property as string,
-            event => callback(...(event as Event & { detail: Array<unknown> }).detail),
-            {
-              signal: abortController.signal
-            }
-          )
-          return () => abortController.abort()
+      if (topic === '$port') {
+        return () => {
+          const messageChannel = new MessageChannel()
+          worker.postMessage({ port: messageChannel.port1 }, [messageChannel.port1])
+          return messageChannel.port2
         }
-      })
+      }
+      if (topic === '$async') {
+        return asyncProxy
+      }
+      if (topic === '$on') {
+        return createProxy(property => {
+          return (callback: (...data: Array<unknown>) => void) => {
+            const abortController = new AbortController()
+            eventTarget.addEventListener(
+              property as string,
+              event => callback(...(event as Event & { detail: Array<unknown> }).detail),
+              {
+                signal: abortController.signal
+              }
+            )
+            return () => abortController.abort()
+          }
+        })
+      }
+      return (...data: Array<any>) => postMessage(topic, data)
     }
-    return (...data: Array<any>) => postMessage(topic, data)
-  })
+  )
 }
 
 export function createProxy<T extends object = object>(

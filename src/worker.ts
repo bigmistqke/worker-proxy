@@ -1,9 +1,9 @@
 import {
-  $MessagePort,
   $transfer,
   createWorkerProxy,
   WorkerProps,
-  WorkerProxy
+  WorkerProxy,
+  WorkerProxyPort
 } from 'vite-plugin-worker-proxy'
 import type HalloWorker from './hallo'
 
@@ -29,7 +29,7 @@ export default (
   transferBuffer(buffer: ArrayBuffer) {
     return $transfer(buffer, [buffer])
   },
-  link(hallo: $MessagePort<typeof HalloWorker>) {
+  link(hallo: WorkerProxyPort<typeof HalloWorker>) {
     halloWorker = createWorkerProxy(hallo)
   }
 })

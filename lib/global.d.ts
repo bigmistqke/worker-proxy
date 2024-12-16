@@ -1,5 +1,5 @@
 declare module '*?worker-proxy' {
-  type $MessagePort<T> = MessagePort & { $: T }
+  type WorkerProxyPort<T> = MessagePort & { $: T }
   type $Transfer = Array<Transferable> & { $transfer: true }
 
   type SyncMethods<T extends Record<string, (...arg: Array<any>) => any>> = {
@@ -15,7 +15,7 @@ declare module '*?worker-proxy' {
     $on: {
       [TKey in keyof Parameters<T>[0]]: (data: Parameters<T>[0][TKey]) => () => void
     }
-    $port: () => $MessagePort<T>
+    $port: () => WorkerProxyPort<T>
   }
   const workerApi: new <T>() => WorkerProxy<T>
   export default workerApi
