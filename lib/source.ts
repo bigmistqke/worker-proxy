@@ -3,16 +3,14 @@ import { $MessagePort, Fn, WorkerProxy } from './types'
 export function getWorkerSource(filePath: string) {
   return /* javascript */ `import getApi from '${filePath}'
 
-function isTransfer(value) {
-  return value && typeof value === 'object' && '$transfer' in value && value.$transfer
-}
 function postMessage(topic, data) {
-  if (isTransfer(data[0])) {
-    const [_data, transferables] = data[0]
+  const last = data[data.length - 1]
+  if (last && typeof last === 'object' && '$transfer' in last && last.$transfer) {
+    const transferables = data.pop()
     self.postMessage(
       {
         topic,
-        data: _data
+        data
       },
       '/',
       transferables
@@ -75,13 +73,13 @@ export function createWorkerProxy<T extends Worker | $MessagePort<Fn>>(worker: T
   > = {}
   const eventTarget = new EventTarget()
 
-  function postMessage(topic: string | symbol, data: $Transfer | Array<any>) {
-    if (isTransfer(data[0])) {
-      const [_data, transferables] = data[0]
+  function postMessage(topic: string | symbol, data: Array<any>) {
+    if (isTransfer(data[data.length - 1])) {
+      const transferables = data.pop()
       worker.postMessage(
         {
           topic,
-          data: _data
+          data
         },
         transferables
       )
@@ -161,15 +159,12 @@ export function createProxy<T extends object = object>(
 
 type $Transfer<T = Array<any>, U = Array<Transferable>> = [T, U] & { $transfer: true }
 
-export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(
-  ...args: [...T, U]
-) {
-  const transferables = args.pop()
-  const result = [args, transferables] as unknown as $Transfer<T, U>
-  result.$transfer = true
-  return result
+export function $transfer<const T extends Array<Transferable>>(...args: T) {
+  // @ts-expect-error
+  args.$transfer = true
+  return args as T & { $transfer: true }
 }
 
-function isTransfer(value: any): value is $Transfer {
+export function isTransfer(value: any): value is $Transfer {
   return value && typeof value === 'object' && '$transfer' in value && value.$transfer
 }
