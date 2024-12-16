@@ -1,4 +1,4 @@
-# `@bigmistqke/vite-plugin-werker`
+# `@bigmistqke/vite-plugin-worker-proxy`
 
 Vite plugin to improve dx with workers.
 
