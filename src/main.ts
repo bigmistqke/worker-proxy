@@ -1,3 +1,4 @@
+import { $transfer } from 'vite-plugin-worker-proxy/source.ts'
 import HalloWorkerApi from './hallo.ts'
 import HalloWorker from './hallo.ts?worker-proxy'
 import WorkerApi from './worker.ts'
@@ -12,7 +13,7 @@ async function example() {
   const port = halloWorker.$port()
 
   // Transfer MessagePort to worker
-  worker.$transfer.link(port, [port])
+  worker.link($transfer(port, [port]))
 
   // Subscribe to pong-calls of worker
   worker.$on.pong(data => console.log('pong', data))
@@ -23,7 +24,7 @@ async function example() {
   const ab = new ArrayBuffer(1024)
   try {
     // Call an async version of `transferBuffer` and transfer the arrayBuffer
-    const result = await worker.$transfer.$async.transferBuffer(ab, [ab])
+    const result = await worker.$async.transferBuffer($transfer(ab, [ab]))
     console.log('result of buffer is:', result)
   } catch (error) {
     console.error(error)

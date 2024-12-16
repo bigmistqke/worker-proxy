@@ -1,24 +1,19 @@
 declare module '*?worker-proxy' {
   type $MessagePort<T> = MessagePort & { $: T }
-  type SyncMethods<T extends Record<string, (...arg: Array<any>) => any>, Transferable = false> = {
+  type Transferable<T, U> = [T, U] & { $transfer: true }
+
+  type SyncMethods<T extends Record<string, (...arg: Array<any>) => any>> = {
     [TKey in keyof T]: (
-      ...args: Transferable extends true
-        ? [...Parameters<T[TKey]>, Array<unknown>]
-        : Parameters<T[TKey]>
+      ...args: Parameters<T[TKey]> | [Transferable<Parameters<T[TKey]>, any>]
     ) => void
   }
-  type AsyncMethods<T extends Record<string, (...arg: Array<any>) => any>, Transferable = false> = {
+  type AsyncMethods<T extends Record<string, (...arg: Array<any>) => any>> = {
     [TKey in keyof T]: (
-      ...args: Transferable extends true
-        ? [...Parameters<T[TKey]>, Array<unknown>]
-        : Parameters<T[TKey]>
+      ...args: Parameters<T[TKey]> | [Transferable<Parameters<T[TKey]>, unknown>]
     ) => Promise<ReturnType<T[TKey]>>
   }
   type WorkerProxy<T> = SyncMethods<ReturnType<T>> & {
-    $transfer: SyncMethods<ReturnType<T>, true> & { $async: AsyncMethods<ReturnType<T>, true> }
-    $async: AsyncMethods<ReturnType<T>> & {
-      $transfer: SyncMethods<ReturnType<T>, true>
-    }
+    $async: AsyncMethods<ReturnType<T>>
     $on: {
       [TKey in keyof Parameters<T>[0]]: (data: Parameters<T>[0][TKey]) => () => void
     }

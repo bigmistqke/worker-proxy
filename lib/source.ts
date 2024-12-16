@@ -3,6 +3,28 @@ import { $MessagePort, Fn, WorkerProxy } from './types'
 export function getWorkerSource(filePath: string) {
   return /* javascript */ `import getApi from '${filePath}'
 
+function isTransfer(value) {
+  return value && typeof value === 'object' && '$transfer' in value && value.$transfer
+}
+function postMessage(topic, data) {
+  if (isTransfer(data[0])) {
+    const [_data, transferables] = data[0]
+    self.postMessage(
+      {
+        topic,
+        data: _data
+      },
+      '/',
+      transferables
+    )
+  } else {
+    self.postMessage({
+      topic,
+      data
+    })
+  }
+}
+
 function createProxy(callback) {
   return new Proxy({}, {
     get(_, property) {
@@ -12,24 +34,9 @@ function createProxy(callback) {
   })
 }
 
-const proxy = createProxy(topic =>
-  topic === '$transfer'
-    ? createProxy(
-        topic =>
-          (...data) => {
-            const transferables = data.pop()
-            self.postMessage({ topic, data }, transferables)
-          }
-      )
-    : (...data) => {
-        self.postMessage({
-          topic,
-          data
-        })
-      }
-)
-
-const api = getApi(proxy)
+const api = getApi(createProxy(topic =>
+  (...data) => postMessage(topic, data)
+))
 
 async function onMessage ({ data: { topic, data, name, port, id } }) {
   if(port){
@@ -39,7 +46,7 @@ async function onMessage ({ data: { topic, data, name, port, id } }) {
   if (id !== undefined) {
     try{
       const result = await api[topic](...data)
-      self.postMessage({ id, data: result })
+      postMessage(topic, result)
     }catch(error){
       self.postMessage({ id, error })
     }
@@ -68,10 +75,28 @@ export function createWorkerProxy<T extends Worker | $MessagePort<Fn>>(worker: T
   > = {}
   const eventTarget = new EventTarget()
 
-  const asyncProxy = createProxy(property => {
+  function postMessage(topic: string | symbol, data: $Transfer | Array<any>) {
+    if (isTransfer(data[0])) {
+      const [_data, transferables] = data[0]
+      worker.postMessage(
+        {
+          topic,
+          data: _data
+        },
+        transferables
+      )
+    } else {
+      worker.postMessage({
+        topic,
+        data
+      })
+    }
+  }
+
+  const asyncProxy = createProxy(topic => {
     return (...data: Array<unknown>) => {
       id++
-      worker.postMessage({ topic: property, data, id })
+      postMessage(topic, data)
       return new Promise((resolve, reject) => {
         pendingMessages[id] = { resolve, reject }
       })
@@ -91,52 +116,37 @@ export function createWorkerProxy<T extends Worker | $MessagePort<Fn>>(worker: T
     eventTarget.dispatchEvent(new CustomEvent(topic, { detail: data }))
   }
 
-  return createProxy<T extends $MessagePort<Fn> ? WorkerProxy<T['$']> : WorkerProxy<T>>(
-    property => {
-      if (property === 'postMessage') {
-        return worker.postMessage.bind(worker)
-      }
-      if (property === '$port') {
-        return () => {
-          const messageChannel = new MessageChannel()
-          worker.postMessage({ port: messageChannel.port1 }, [messageChannel.port1])
-          return messageChannel.port2
-        }
-      }
-      if (property === '$async') {
-        return asyncProxy
-      }
-      if (property === '$transfer') {
-        return createProxy(property => {
-          if (property === '$async') {
-            return asyncProxy
-          }
-          return (...data: Array<any>) => {
-            const transferables = data.pop()
-            worker.postMessage({ topic: property, data }, transferables)
-          }
-        })
-      }
-      if (property === '$on') {
-        return createProxy(property => {
-          return (callback: (...args: Array<unknown>) => void) => {
-            const abortController = new AbortController()
-            eventTarget.addEventListener(
-              property as string,
-              event => callback(...(event as Event & { detail: Array<unknown> }).detail),
-              {
-                signal: abortController.signal
-              }
-            )
-            return () => abortController.abort()
-          }
-        })
-      }
-      return (...data: Array<unknown>) => {
-        worker.postMessage({ topic: property, data })
+  return createProxy<T extends $MessagePort<Fn> ? WorkerProxy<T['$']> : WorkerProxy<T>>(topic => {
+    if (topic === 'postMessage') {
+      return worker.postMessage.bind(worker)
+    }
+    if (topic === '$port') {
+      return () => {
+        const messageChannel = new MessageChannel()
+        worker.postMessage({ port: messageChannel.port1 }, [messageChannel.port1])
+        return messageChannel.port2
       }
     }
-  )
+    if (topic === '$async') {
+      return asyncProxy
+    }
+    if (topic === '$on') {
+      return createProxy(property => {
+        return (callback: (...data: Array<unknown>) => void) => {
+          const abortController = new AbortController()
+          eventTarget.addEventListener(
+            property as string,
+            event => callback(...(event as Event & { detail: Array<unknown> }).detail),
+            {
+              signal: abortController.signal
+            }
+          )
+          return () => abortController.abort()
+        }
+      })
+    }
+    return (...data: Array<any>) => postMessage(topic, data)
+  })
 }
 
 export function createProxy<T extends object = object>(
@@ -147,4 +157,19 @@ export function createProxy<T extends object = object>(
       return callback(property)
     }
   })
+}
+
+type $Transfer<T = Array<any>, U = Array<Transferable>> = [T, U] & { $transfer: true }
+
+export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(
+  ...args: [...T, U]
+) {
+  const transferables = args.pop()
+  const result = [args, transferables] as unknown as $Transfer<T, U>
+  result.$transfer = true
+  return result
+}
+
+function isTransfer(value: any): value is $Transfer {
+  return value && typeof value === 'object' && '$transfer' in value && value.$transfer
 }

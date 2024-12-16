@@ -1,35 +1,24 @@
+type $Transfer<T, U extends Array<Transferable> = Array<Transferable>> = [T, U] & {
+  $transfer: true
+}
 export type Fn = (...arg: Array<any>) => any
 
-export type SyncMethods<T extends Record<string, Fn>, Transferable = false> = {
-  [TKey in keyof T]: (
-    ...args: Transferable extends true
-      ? [...Parameters<T[TKey]>, Array<unknown>]
-      : Parameters<T[TKey]>
-  ) => void
+export type SyncMethods<T extends Record<string, Fn>> = {
+  [TKey in keyof T]: (...args: Parameters<T[TKey]> | [$Transfer<Parameters<T[TKey]>>]) => void
 }
 
-export type AsyncMethods<T extends Record<string, Fn>, Transferable = false> = {
+export type AsyncMethods<T extends Record<string, Fn>> = {
   [TKey in keyof T]: (
-    ...args: Transferable extends true
-      ? [...Parameters<T[TKey]>, Array<unknown>]
-      : Parameters<T[TKey]>
+    ...args: Parameters<T[TKey]> | [$Transfer<Parameters<T[TKey]>>]
   ) => Promise<ReturnType<T[TKey]>>
 }
 
 export type WorkerProps<T extends Record<string, Fn>> = SyncMethods<T> & {
-  $transfer: SyncMethods<T, true> & {
-    $async: AsyncMethods<T, true>
-  }
-  $async: AsyncMethods<T> & {
-    $transfer: AsyncMethods<T, true>
-  }
+  $async: AsyncMethods<T>
 }
 
 export type WorkerProxy<T extends Fn = Fn> = SyncMethods<ReturnType<T>> & {
-  $transfer: SyncMethods<ReturnType<T>, true> & { $async: AsyncMethods<ReturnType<T>, true> }
-  $async: AsyncMethods<ReturnType<T>> & {
-    $transfer: SyncMethods<ReturnType<T>, true>
-  }
+  $async: AsyncMethods<ReturnType<T>>
   $on: {
     [TKey in keyof Parameters<T>[0]]: (data: Parameters<T>[0][TKey]) => () => void
   }
