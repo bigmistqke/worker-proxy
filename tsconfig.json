@@ -21,7 +21,8 @@
     "noFallthroughCasesInSwitch": true,
 
     "paths": {
-      "vite-plugin-worker-proxy/*": ["./lib/*"]
+      "vite-plugin-worker-proxy/*": ["./lib/*"],
+      "vite-plugin-worker-proxy": ["./lib/index.ts"]
     }
   },
   "include": ["src", "lib"]

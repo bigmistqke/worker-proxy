@@ -1,21 +1,23 @@
-import { WorkerProps } from 'vite-plugin-worker-proxy/types'
-import type halloWorker from './hallo'
+import { $MessagePort, createWorkerProxy, WorkerProps, WorkerProxy } from 'vite-plugin-worker-proxy'
+import type HalloWorker from './hallo'
 
-export default ({
-  self,
-  hallo
-}: WorkerProps<{
-  self: { pong(timestamp: number): void; buffer(buffer: ArrayBuffer): void }
-  hallo: ReturnType<typeof halloWorker>
-}>) => ({
+let currentHallo: WorkerProxy<typeof HalloWorker>
+
+export default (
+  props: WorkerProps<{ pong(timestamp: number): void; buffer(buffer: ArrayBuffer): void }>
+) => ({
   ping(timestamp: number) {
     console.log('ping', timestamp)
-    hallo?.hallo()
-    setTimeout(() => self.pong(performance.now()), 1000)
+    if (currentHallo) {
+      currentHallo.hallo()
+    }
+    setTimeout(() => props.pong(performance.now()), 1000)
   },
-  buffer(buffer: ArrayBuffer) {
-    console.log(buffer)
-    self.$transfer.buffer(buffer, [buffer])
+  transferBuffer(buffer: ArrayBuffer) {
+    props.$transfer.buffer(buffer, [buffer])
     return true
+  },
+  link(hallo: $MessagePort<typeof HalloWorker>) {
+    currentHallo = createWorkerProxy(hallo)
   }
 })
