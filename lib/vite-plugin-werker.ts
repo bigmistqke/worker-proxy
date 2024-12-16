@@ -3,7 +3,7 @@ import path from 'path'
 import { rollup } from 'rollup'
 import type { Plugin } from 'vite'
 import { build } from 'vite'
-import { getClientSource, getWorkerSource } from './get-source'
+import { getClientSource, getWorkerSource } from './source'
 
 export default (): Plugin => {
   let isDev: boolean
@@ -17,8 +17,6 @@ export default (): Plugin => {
     },
 
     async load(id) {
-      console.log('LOAD', id)
-
       if (id.endsWith('?worker_file&type=module')) {
         const originalPath = id.replace('?worker_file&type=module', '')
 
@@ -26,8 +24,8 @@ export default (): Plugin => {
         return getWorkerSource(originalPath)
       }
 
-      if (id.endsWith('?werker')) {
-        const originalPath = id.replace('?werker', '')
+      if (id.endsWith('?worker-proxy')) {
+        const originalPath = id.replace('?worker-proxy', '')
         const fileName = path.basename(originalPath, path.extname(originalPath))
 
         if (!isDev) {
