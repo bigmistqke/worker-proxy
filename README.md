@@ -1,22 +1,24 @@
 # `@bigmistqke/vite-plugin-worker-proxy`
 
-Vite plugin to improve dx with workers.
+Vite plugin to improve worker DX.
 
 ## Table of Contents
 
-- [basics](#basics): A simple example.
-- [$on](#on): Subscribe to calls
-- [$transfer](#transfer): Transfer `Transferables`
-- [$async](#async): Await responses of worker-methods
-- [$port](#port): Expose a WorkerProxy's api to another WorkerProxy.
+- [basics](#basics) _A simple example_
+- [$on](#on) _Subscribe to calls_
+- [$transfer](#transfer) _Transfer `Transferables`_
+- [$async](#async) _Await responses of worker-methods_
+- [$port](#port) _Expose a WorkerProxy's api to another WorkerProxy_
 
 ## Basics
+
+A simple example
 
 **main.ts**
 
 ```tsx
 import type WorkerApi from './worker'
-import Worker from './worker?werker'
+import Worker from './worker?worker-proxy'
 
 // Create WorkerProxy
 const worker = new Worker<typeof WorkerApi>()
@@ -39,13 +41,13 @@ export default () => ({
 
 ## $on
 
-Subscribe to calls from the worker with `worker.$on`
+Subscribe to calls from WorkerProxy with `worker.$on(...)`
 
 **main.ts**
 
 ```tsx
 import type WorkerApi from './worker'
-import Worker from './worker?werker'
+import Worker from './worker?worker-proxy'
 
 // Create WorkerProxy
 const worker = new Worker<typeof WorkerApi>()
@@ -77,42 +79,15 @@ export default (
 })
 ```
 
-## $transfer
-
-Transfer `Transferables` with `$transfer`
-
-```tsx
-import { $transfer } from '@bigmistqke/vite-plugin-worker-proxy'
-import Worker from './worker?werker'
-import type WorkerApi from './worker'
-
-const worker = new Worker<typeof WorkerApi>()
-
-const buffer = new ArrayBuffer()
-
-// Transfer buffer to worker
-worker.setBuffer(buffer, $transfer(buffer))
-```
-
-**worker.ts**
-
-```tsx
-export default () => ({
-  setBuffer(buffer: ArrayBuffer) {
-    console.log(buffer)
-  }
-})
-```
-
 ## $async
 
-Await responses of worker-methods with `worker.$async.method(...)`.
+Await responses of WorkerProxy-methods with `worker.$async.method(...)`
 
 **main.ts**
 
 ```tsx
 import { $transfer } from '@bigmistqke/vite-plugin-worker-proxy'
-import Worker from './worker?werker'
+import Worker from './worker?worker-proxy'
 import type WorkerApi from './worker'
 
 const worker = new Worker<typeof WorkerApi>()
@@ -130,27 +105,63 @@ export default () => ({
 })
 ```
 
-## $port
+## $transfer
 
-Expose a WorkerProxy's api to another WorkerProxy with `worker.$port()` and `createWorkerProxy`.
+Transfer `Transferables` to/from WorkerProxies with `$transfer(...)`
 
 **main.ts**
 
 ```tsx
 import { $transfer } from '@bigmistqke/vite-plugin-worker-proxy'
-import HalloWorker from './hallo-worker?werker'
+import Worker from './worker?worker-proxy'
+import type WorkerApi from './worker'
+
+const worker = new Worker<typeof WorkerApi>()
+
+const buffer = new ArrayBuffer()
+
+// Transfer buffer to worker
+worker.setBuffer($transfer(buffer, [buffer]))
+
+// Transfer buffer from worker back to main thread
+worker.$async.getBuffer().then(console.log)
+```
+
+**worker.ts**
+
+```tsx
+let buffer: ArrayBuffer
+export default () => ({
+  setBuffer(_buffer: ArrayBuffer) {
+    buffer = _buffer
+  },
+  getBuffer() {
+    return $transfer(buffer, [buffer])
+  }
+})
+```
+
+## $port
+
+Expose a WorkerProxy's API to another WorkerProxy with `worker.$port()` and `createWorkerProxy()`
+
+**main.ts**
+
+```tsx
+import { $transfer } from '@bigmistqke/vite-plugin-worker-proxy'
+import HalloWorker from './hallo-worker?worker-proxy'
 import type HalloWorkerApi from './hallo-worker'
-import GoodbyeWorker from './goodbye-worker?werker'
+import GoodbyeWorker from './goodbye-worker?worker-proxy'
 import type GoodbyeWorkerApi from './goodbye-worker'
 
 const halloWorker = new HalloWorker<typeof HalloWorkerApi>()
 const goodbyeWorker = new GoodbyeWorker<typeof GoodbyeWorkerApi>()
 
-// Get WorkerPort of goodbyeWorker
+// Get a WorkerPort of goodbyeWorker
 const port = goodbyeWorker.$port()
 
-// Transfer WorkerPort to halloWorker
-halloWorker.link(port, $transfer(port))
+// Transfer the WorkerPort to halloWorker
+halloWorker.link($transfer(port, [port]))
 
 halloWorker.hallo()
 ```

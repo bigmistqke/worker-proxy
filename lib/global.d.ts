@@ -3,11 +3,13 @@ declare module '*?worker-proxy' {
   type $Transfer = Array<Transferable> & { $transfer: true }
 
   type SyncMethods<T extends Record<string, (...arg: Array<any>) => any>> = {
-    [TKey in keyof T]: (...args: Parameters<T[TKey]> | [...Parameters<T[TKey]>, $Transfer]) => void
+    [TKey in keyof T]: (
+      ...args: Parameters<T[TKey]> | [Transferable<Parameters<T[TKey]>, any>]
+    ) => void
   }
   type AsyncMethods<T extends Record<string, (...arg: Array<any>) => any>> = {
     [TKey in keyof T]: (
-      ...args: Parameters<T[TKey]> | [...Parameters<T[TKey]>, $Transfer]
+      ...args: Parameters<T[TKey]> | [Transferable<Parameters<T[TKey]>, unknown>]
     ) => Promise<ReturnType<T[TKey]>>
   }
   type WorkerProxy<T> = SyncMethods<ReturnType<T>> & {
