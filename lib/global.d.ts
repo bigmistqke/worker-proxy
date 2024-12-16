@@ -1,27 +1,23 @@
-type SyncWerkerMethods<T> = {
-  [TKey in keyof ReturnType<T>]: (...args: Parameters<ReturnType<T>[TKey]>) => void
+type SyncMethods<T> = {
+  [TKey in keyof T]: (...args: Parameters<T[TKey]>) => void
 }
-type AsyncWerkerMethods<T> = {
-  [TKey in keyof ReturnType<T>]: (
-    ...args: Parameters<ReturnType<T>[TKey]>
-  ) => Promise<ReturnType<ReturnType<T>[TKey]>>
+type AsyncMethods<T> = {
+  [TKey in keyof T]: (...args: Parameters<T[TKey]>) => Promise<ReturnType<T[TKey]>>
 }
 
-type Transfer<T> = (
-  ...transferables: Array<any>
-) => SyncWerkerMethods<T> & { $wait: AsyncWerkerMethods<T> }
-type WaitMethod<T> = AsyncWerkerMethods<T> & {
-  $transfer: (...transferables: Array<any>) => SyncWerkerMethods<T>
-}
-type Werker<T> = SyncWerkerMethods<T> & {
-  $transfer: Transfer<T>
-  $wait: WaitMethod<T>
+type Werker<T> = SyncMethods<ReturnType<T>> & {
+  $transfer: (
+    ...transferables: Array<any>
+  ) => SyncMethods<ReturnType<T>> & { $async: AsyncMethods<ReturnType<T>> }
+  $async: AsyncMethods<ReturnType<T>> & {
+    $transfer: (...transferables: Array<any>) => SyncMethods<ReturnType<T>>
+  }
   $on: {
     [TKey in keyof Parameters<T>[0]['self']]: (data: Parameters<T>[0][TKey]) => () => void
   }
   $link<U extends Omit<Parameters<T>[0], 'self'>, UKey extends keyof U>(
     name: UKey,
-    worker: Werker<(...args: Array<unknown>) => U[UKey]>
+    worker: Werker<(...args: Array<unknown>) => Omit<U[UKey], '$async' | '$transfer'>>
   ): void
 }
 

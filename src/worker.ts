@@ -1,5 +1,5 @@
 import { WerkerProps } from '../lib/types'
-import type halloWorker from './hallo-worker'
+import type halloWorker from './hallo'
 
 export default ({
   self,
@@ -10,7 +10,7 @@ export default ({
 }>) => ({
   ping(timestamp: number) {
     console.log('ping', timestamp)
-    hallo.hallo()
+    hallo?.hallo()
     // setTimeout(() => self.pong(performance.now()), 1000)
   },
   buffer(buffer: ArrayBuffer) {

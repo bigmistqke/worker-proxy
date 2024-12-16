@@ -1,168 +1,97 @@
-import { existsSync } from 'fs'
+import virtual from '@rollup/plugin-virtual'
+import path from 'path'
+import { rollup } from 'rollup'
+import type { Plugin } from 'vite'
+import { build } from 'vite'
+import { getClientSource, getWorkerSource } from './get-source'
 
-export default () => {
+export default (): Plugin => {
+  let isDev: boolean
+
   return {
-    name: 'werker-transform', // Required, will show up in warnings and errors
-    load(id: string) {
+    name: 'werker-transform', // Plugin name for warnings and errors
+
+    config(_, { command }) {
+      // Detect the mode based on the command
+      isDev = command === 'serve' // 'serve' for dev, 'build' for production
+    },
+
+    async load(id) {
+      console.log('LOAD', id)
+
       if (id.endsWith('?worker_file&type=module')) {
         const originalPath = id.replace('?worker_file&type=module', '')
 
-        // Worker wrapper
-        const code = /* javascript */ `import getApi from "${originalPath}"
-const workerChannels = {}
-const api = getApi(
-  new Proxy(
-    {},
-    {
-      get(_, workerName) {
-        return new Proxy(
-          {},
-          {
-            get(_, property) {
-              if (property === "$transfer") {
-                return (...transferables) => {
-                  return new Proxy(
-                    {},
-                    {
-                      get(_, property) {
-                        return (...data) =>
-                          self.postMessage(
-                            { topic: property, data },
-                            transferables
-                          )
-                      },
-                    }
-                  )
-                }
-              }
-              return (...data) => {
-                workerChannels[workerName]?.postMessage({
-                  topic: property,
-                  data,
-                })
-              }
-            },
-          }
-        )
-      },
-    }
-  )
-)
-self.onmessage = async ({ data: { topic, data, name, port, id } }) => {
-  if(id !== undefined){
-    const result = await api[topic](...data)
-    self.postMessage({id, data: result })
-    return
-  }
-  if (topic === "$send") {
-    workerChannels[name] = port
-    return
-  }
-  if (topic === "$receive") {
-    port.onmessage = ({ data: { topic, data } }) => {
-      api[topic](...data)
-    }
-    return
-  }
-  api[topic](...data)
-}`
-
-        return code
+        // Return the wrapped worker source
+        return getWorkerSource(originalPath)
       }
+
       if (id.endsWith('?werker')) {
         const originalPath = id.replace('?werker', '')
+        const fileName = path.basename(originalPath, path.extname(originalPath))
 
-        if (!existsSync(originalPath)) {
-          return null // No file, no processing
-        }
+        if (!isDev) {
+          // Production: Bundle worker file into standalone package
+          const bundledWorkerPath = path.resolve('dist', 'assets', `${fileName}.worker.js`)
 
-        // Client proxy for worker
-        const code = /* javascript */ `
-export default function(workers){
-  const eventTarget = new EventTarget()
-  const worker = new Worker(new URL("${originalPath}", import.meta.url), { type: 'module' });
+          const clientFileName = `${fileName}.worker-file.js`
 
-  let id = 0;
-
-  const pendingMessages = {};
-
-  worker.onmessage = ({data: {topic, data, id}}) => {
-    if(pendingMessages[id]){
-      pendingMessages[id](data)
-      delete pendingMessages[id]
-      return
-    }
-    eventTarget.dispatchEvent(new CustomEvent(topic, {detail: data}))
-  }
-
-  return new Proxy({}, {
-    get(target, property) {
-      if(property === 'postMessage'){
-        return (...args) => worker.postMessage(...args)
-      }
-      if(property === '$transfer'){
-        return (...transferables) => {
-          return new Proxy({}, {
-            get(_, property){
-              if(property === '$wait'){
-                return new Proxy({}, {
-                  get(target, property){
-                    return (...data) => {
-                      id++
-                      worker.postMessage({topic: property, data, id })
-                      return new Promise(resolve => {
-                        pendingMessages[id] = resolve
-                      })
-                    }
-                  }
-                })
-              }
-              return (...data) => {
-                worker.postMessage({topic: property, data }, transferables)
+          const result = await build({
+            build: {
+              lib: {
+                entry: originalPath,
+                formats: ['es'],
+                fileName: clientFileName
+              },
+              outDir: path.dirname(bundledWorkerPath),
+              rollupOptions: {
+                output: {
+                  inlineDynamicImports: true // Ensures all imports are bundled
+                }
               }
             }
           })
-        }
-      }
-      if(property === '$link'){
-        return (name, otherWorker) => {
-          const channel = new MessageChannel();
-          worker.postMessage({topic: '$send', name, port: channel.port1}, [channel.port1])
-          otherWorker.postMessage({topic: '$receive', name, port: channel.port2}, [channel.port2])
-        }
-      }
-      if(property === '$on'){
-          return new Proxy({}, {
-            get(_, property){
-              return (callback) => {
-                const abortController = new AbortController();
-                eventTarget.addEventListener(property, (event) => callback(...event.detail), {signal: abortController.signal })
-                return () => abortController.abort()
-              }
-            }
+
+          // @ts-ignore
+          const source = result[0].output[0].code
+
+          // Use the virtual plugin to define files in memory
+          const virtualPlugin = virtual({
+            [fileName]: source,
+            [`${fileName}.worker.js`]: getWorkerSource(`./${fileName}`)
           })
-      }
-      if(property === '$wait'){
-        return new Proxy({}, {
-          get(_, property){
-            return (...data) => {
-              id++
-              worker.postMessage({topic: property, data, id })
-              return new Promise(resolve => {
-                pendingMessages[id] = resolve
-              })
+
+          const bundle = await rollup({ input: `${fileName}.worker.js`, plugins: [virtualPlugin] })
+
+          // Generate output
+          const { output } = await bundle.generate({
+            format: 'esm'
+          })
+
+          let code = ''
+
+          // Write bundled output to a file or display it
+          for (const chunkOrAsset of output) {
+            if (chunkOrAsset.type === 'chunk') {
+              code += chunkOrAsset.code
             }
           }
-        })
-      }
-      return (...data) => {
-        worker.postMessage({topic: property, data })
-      }
-    }
-  })
-}`
 
-        return code
+          // Close the bundle
+          await bundle.close()
+
+          this.emitFile({
+            type: 'asset',
+            fileName: `assets/${fileName}.worker.js`,
+            source: code
+          })
+
+          // Return client-side proxy pointing to bundled worker
+          return getClientSource(`./assets/${fileName}.worker.js`)
+        }
+
+        // Development: Directly load worker dynamically
+        return getClientSource(`${originalPath}?worker_file&type=module`)
       }
     }
   }

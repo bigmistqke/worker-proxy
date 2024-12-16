@@ -11,6 +11,7 @@
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
+    "types": ["vite/client"],
     "noEmit": true,
 
     /* Linting */
