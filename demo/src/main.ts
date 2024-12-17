@@ -1,8 +1,8 @@
 import { createWorkerProxy } from '@bigmistqke/worker-proxy'
 import type PluginMethods from './worker-methods.ts'
+import PluginWorker from "./worker-methods.ts?worker-proxy"
 import type VanillaMethods from './worker-vanilla.ts'
 import VanillaWorker from "./worker-vanilla.ts?worker"
-import PluginWorker from "./worker.ts?worker-proxy"
 
 async function example() {
   // Vanilla worker-proxy
