@@ -126,16 +126,17 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
 }
 
 /**
- * Prepare worker for commands of `WorkerProxy` by registering the methods.
+ * Prepare worker for commands of `WorkerProxy` by registering its methods.
  * 
  * Accepts either 
- * - an object of methods
- * - a callback that 
- *     - accepts an object of `self`-methods
- *          - these can be subscribed to with `.$on` from the main thread.
- *     - returns an object of methods
+ * - An object of methods
+ * - A callback that 
+ *     - Accepts an object of methods 
+ *         - When called these call back to the main thread
+ *         - These can be subscribed to with `workerProxy.$on.method`
+ *     - Returns an object of methods
  * 
- * Returns the input, for ease of typing (see example)
+ * Returns the input, for ease of typing:
  * 
  * @example 
  * 
@@ -153,7 +154,7 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
  * workerProxy.hallo()
  * ```
  */
-export function registerMethods<T extends Record<string, Fn> | ((args: Record<string, Fn>) => Record<string, Fn>)>(getMethods: T) {
+export function registerMethods<T extends Record<string, Fn> | ((args: any) => Record<string, Fn>)>(getMethods: T) {
   const api: Record<string, Fn> =
     typeof getMethods === 'function'
       ? getMethods(
@@ -195,6 +196,39 @@ export function registerMethods<T extends Record<string, Fn> | ((args: Record<st
   return getMethods
 }
 
+/**
+ * Utility function to accomodate for `Transferables`
+ * 
+ * @example
+ * 
+ * ```tsx
+ * const buffer = new ArrayBuffer()
+ * 
+ * // This will clone the buffer
+ * workerProxy.sendBuffer(ab)
+ *
+ * // This will transfer the buffer without cloning
+ * workerProxy.sendBuffer($transfer(ab, [ab]))
+ * ```
+ * 
+ * @example
+ * 
+ * Also works when returning a value from a
+ * 
+ * ```tsx
+ * // main.ts
+ * workerProxy.$async.getBuffer().then(console.log)
+ * 
+ * // worker.ts
+ * const buffer = new ArrayBuffer()
+ * 
+ * const methods = {
+ *   getBuffer(){
+ *     return $transfer(ab, [ab])
+ *   }
+ * }
+ * ```
+ */
 export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(
   ...args: [...T, U]
 ) {
