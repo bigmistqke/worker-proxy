@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "reset": "rm -rf node_modules && rm pnpm-lock.yaml && pnpm install"
   },
   "devDependencies": {
     "typescript": "~5.6.2",
@@ -13,7 +14,7 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "dependencies": {
-    "@bigmistqke/vite-plugin-worker-proxy": "../vite-plugin-worker-proxy",
-    "@bigmistqke/worker-proxy": "../worker-proxy"
+    "@bigmistqke/vite-plugin-worker-proxy": "^0.0.5",
+    "@bigmistqke/worker-proxy": "^0.0.5"
   }
 }
