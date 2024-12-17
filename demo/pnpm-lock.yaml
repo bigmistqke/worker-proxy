@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@bigmistqke/vite-plugin-worker-proxy':
-        specifier: ^0.0.2
-        version: 0.0.2(postcss@8.4.49)(typescript@5.6.3)(vite@6.0.3)
+        specifier: ^0.0.3
+        version: 0.0.3(postcss@8.4.49)(typescript@5.6.3)(vite@6.0.3)
       '@bigmistqke/worker-proxy':
-        specifier: ^0.0.1
-        version: 0.0.1
+        specifier: ^0.0.3
+        version: 0.0.3
     devDependencies:
       typescript:
         specifier: ~5.6.2
@@ -27,13 +27,16 @@ importers:
 
 packages:
 
-  '@bigmistqke/vite-plugin-worker-proxy@0.0.2':
-    resolution: {integrity: sha512-DjxfbYJZHgNjDz8q3zocNfHfucFk2ILBrRFY/Cr9hayyJHWA7Q+wH4EdqMNcKloS35v54G++a93mfv8PE994Aw==}
+  '@bigmistqke/vite-plugin-worker-proxy@0.0.3':
+    resolution: {integrity: sha512-Z2szHmoumlWq+8zRwqcac7cVAVgMMZzlEQqb2z6FccjJTyHtNNMa98mPNMScIF/VzKV85g7Z6WwQit7gX4N8lg==}
     peerDependencies:
       vite: ^5.4.2
 
   '@bigmistqke/worker-proxy@0.0.1':
     resolution: {integrity: sha512-b8zwIHwnTcrZ3nJ8KIZ7ubJCYJSulnjKEPRlGNuWVD5AFm/KyhcKzePM1b5gGPfer/NFBdkc6DUNmXpY3wrn1Q==}
+
+  '@bigmistqke/worker-proxy@0.0.3':
+    resolution: {integrity: sha512-2PqJY5PysEmXZ8dCs8xrrIcDeUOtHXUqzjrROW3sHdv00R4E1ltMRCstELSXPsvFaFqFmXjed5IVPMUXeMHafg==}
 
   '@esbuild/aix-ppc64@0.24.0':
     resolution: {integrity: sha512-WtKdFM7ls47zkKHFVzMz8opM7LkcsIp9amDUBIAWirg70RM71WRSjdILPsY5Uv1D42ZpUfaPILDlfactHgsRkw==}
@@ -691,7 +694,7 @@ packages:
 
 snapshots:
 
-  '@bigmistqke/vite-plugin-worker-proxy@0.0.2(postcss@8.4.49)(typescript@5.6.3)(vite@6.0.3)':
+  '@bigmistqke/vite-plugin-worker-proxy@0.0.3(postcss@8.4.49)(typescript@5.6.3)(vite@6.0.3)':
     dependencies:
       '@bigmistqke/worker-proxy': 0.0.1
       tsup: 8.3.5(postcss@8.4.49)(typescript@5.6.3)
@@ -707,6 +710,8 @@ snapshots:
       - yaml
 
   '@bigmistqke/worker-proxy@0.0.1': {}
+
+  '@bigmistqke/worker-proxy@0.0.3': {}
 
   '@esbuild/aix-ppc64@0.24.0':
     optional: true

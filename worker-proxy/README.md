@@ -4,15 +4,37 @@ Library to improve worker DX, similar to [ComLink](https://github.com/GoogleChro
 
 ## Table of Contents
 
-- [basics](#basics) _A simple example_
+- [Getting Started](#getting-started)
+- [Basic Example](#basics)
 - [$on](#on) _Subscribe to calls_
 - [$transfer](#transfer) _Transfer `Transferables`_
 - [$async](#async) _Await responses of worker-methods_
 - [$port](#port) _Expose a WorkerProxy's api to another WorkerProxy_
 
-## Basics
+## Getting Started
 
-A simple example
+pnpm
+
+```bash
+pnpm add --save-dev @bigmistqke/vite-plugin-worker-proxy
+pnpm add @bigmistqke/worker-proxy
+```
+
+npm
+
+```bash
+npm add --save-dev @bigmistqke/vite-plugin-worker-proxy
+npm add @bigmistqke/worker-proxy
+```
+
+yarn
+
+```bash
+yarn add --dev @bigmistqke/vite-plugin-worker-proxy
+yarn add --dev @bigmistqke/worker-proxy
+```
+
+## Basic Example
 
 **main.ts**
 

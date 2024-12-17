@@ -4,15 +4,51 @@ Vite plugin integration of `@bigmistqke/worker-proxy`, automatically wrapping th
 
 ## Table of Contents
 
-- [basics](#basics) _A simple example_
+- [Getting Started](#getting-started)
+- [Basic Example](#basics)
 - [$on](#on) _Subscribe to calls_
 - [$transfer](#transfer) _Transfer `Transferables`_
 - [$async](#async) _Await responses of worker-methods_
 - [$port](#port) _Expose a WorkerProxy's api to another WorkerProxy_
 
-## Basics
+## Getting Started
 
-A simple example
+**Install Package**
+
+pnpm
+
+```bash
+pnpm add --save-dev @bigmistqke/vite-plugin-worker-proxy
+pnpm add @bigmistqke/worker-proxy
+```
+
+npm
+
+```bash
+npm add --save-dev @bigmistqke/vite-plugin-worker-proxy
+npm add @bigmistqke/worker-proxy
+```
+
+yarn
+
+```bash
+yarn add --dev @bigmistqke/vite-plugin-worker-proxy
+yarn add --dev @bigmistqke/worker-proxy
+```
+
+**Add Types**
+
+To augment the type `*?worker-proxy` imports we need to include `@bigmistqke/vite-plugin-worker-proxy/client` in the `tsconfig.json`.
+
+```json
+{
+  "compilerOptions": {
+    "types": ["vite/client", "@bigmistqke/vite-plugin-worker-proxy/client"]
+  }
+}
+```
+
+## Basic Example
 
 **main.ts**
 
