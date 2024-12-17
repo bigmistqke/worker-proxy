@@ -1,0 +1,33 @@
+{
+  "name": "@bigmistqke/vite-plugin-worker-proxy",
+  "version": "0.0.2",
+  "type": "module",
+  "description": "Vite integration of @bigmistqke/worker-proxy.",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./client": {
+      "types": "./client.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.5.3"
+  },
+  "peerDependencies": {
+    "vite": "^5.4.2"
+  },
+  "dependencies": {
+    "@bigmistqke/worker-proxy": "^0.0.1",
+    "tsup": "^8.3.5"
+  }
+}

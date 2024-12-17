@@ -1,17 +1,18 @@
-import { $Transfer, Fn, WorkerProxy, WorkerProxyPort } from './types'
+export * from "./types.ts"
+import type { $Transfer, Fn, WorkerProxy, WorkerProxyPort } from './types.ts'
 
-export function generateWorkerSource(url: string) {
-  return /* javascript */ `import getWorkerMethods from '${url}'
-import { initWorker } from "../lib/source"
-initWorkerMethods(getWorkerMethods)`
+function createProxy<T extends object = object>(
+  callback: (property: string | symbol) => void
+) {
+  return new Proxy({} as T, {
+    get(_, property) {
+      return callback(property)
+    }
+  })
 }
 
-export function generateClientSource(url: string) {
-  return /* javascript */ `import { createWorkerProxy } from "vite-plugin-worker-proxy"
-export default function(){
-  const worker = new Worker(${JSON.stringify(url)}, { type: 'module' });
-  return createWorkerProxy(worker)
-};`
+function isTransfer(value: any): value is $Transfer {
+  return value && typeof value === 'object' && '$transfer' in value && value.$transfer
 }
 
 export function createWorkerProxy<T extends Worker | WorkerProxyPort<any>>(worker: T) {
@@ -95,21 +96,7 @@ export function createWorkerProxy<T extends Worker | WorkerProxyPort<any>>(worke
   )
 }
 
-export function createProxy<T extends object = object>(
-  callback: (property: string | symbol) => void
-) {
-  return new Proxy({} as T, {
-    get(_, property) {
-      return callback(property)
-    }
-  })
-}
-
-export function isTransfer(value: any): value is $Transfer {
-  return value && typeof value === 'object' && '$transfer' in value && value.$transfer
-}
-
-export function initWorkerMethods(getApi: unknown) {
+export function createWorkerMethods(getApi: unknown) {
   const api =
     typeof getApi === 'function'
       ? getApi(

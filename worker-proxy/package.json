@@ -1,0 +1,27 @@
+{
+  "name": "@bigmistqke/worker-proxy",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Improve worker DX with a proxy.",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "prettier": "2.8.4",
+    "tsup": "6.6.3",
+    "vitest": "0.28.5",
+    "typescript": "^5.7.2"
+  }
+}

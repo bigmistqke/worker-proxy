@@ -5,13 +5,13 @@
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+    "types": ["vite/client", "@bigmistqke/vite-plugin-worker-proxy/client"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
-    "types": ["vite/client"],
     "noEmit": true,
 
     /* Linting */
@@ -19,11 +19,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-
-    "paths": {
-      "vite-plugin-worker-proxy/*": ["./lib/*"],
-      "vite-plugin-worker-proxy": ["./lib/index.ts"]
-    }
+    "noUncheckedSideEffectImports": true
   },
-  "include": ["src", "lib"]
+  "include": ["src"]
 }

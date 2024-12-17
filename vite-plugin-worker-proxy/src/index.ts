@@ -1,17 +1,29 @@
 import { promises as fs } from 'fs'
 import { basename, extname, resolve } from 'path'
 import type { Plugin } from 'vite'
-import { generateClientSource, generateWorkerSource } from './source'
+
+function generateWorkerSource(url: string) {
+  return /* javascript */ `import getWorkerMethods from '${url}'
+import { createWorkerMethods } from "@bigmistqke/worker-proxy"
+createWorkerMethods(getWorkerMethods)`
+}
+
+function generateClientSource(url: string) {
+  return /* javascript */ `import { createWorkerProxy } from "@bigmistqke/worker-proxy"
+export default function(){
+  const worker = new Worker(${JSON.stringify(url)}, { type: 'module' });
+  return createWorkerProxy(worker)
+};`
+}
 
 export default (): Plugin => {
   let isDev: boolean
 
   return {
-    name: 'werker-transform', // Plugin name for warnings and errors
+    name: 'vite-plugin-worker-proxy',
 
     config(_, { command }) {
-      // Detect the mode based on the command
-      isDev = command === 'serve' // 'serve' for dev, 'build' for production
+      isDev = command === 'serve'
     },
 
     async load(id) {
