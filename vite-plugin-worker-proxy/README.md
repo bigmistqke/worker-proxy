@@ -68,7 +68,7 @@ worker.log('hello', 'bigmistqke')
 ```tsx
 import { WorkerProps } from '@bigmistqke/worker-proxy'
 
-// Return object of methods
+// Default export the methods you want to expose.
 export default {
   log(...args: Array<string>) {
     console.log(...args)
@@ -83,11 +83,11 @@ Subscribe to calls from WorkerProxy with `worker.$on(...)`
 **main.ts**
 
 ```tsx
-import type WorkerApi from './worker'
 import Worker from './worker?worker-proxy'
+import type WorkerMethods from './worker'
 
 // Create WorkerProxy
-const worker = new Worker<typeof WorkerApi>()
+const worker = new Worker<typeof WorkerMethods>()
 
 // Subscribe to .pong prop-method calls of worker
 worker.$on.pong(data => {
@@ -102,7 +102,7 @@ worker.ping(performance.now())
 **worker.ts**
 
 ```tsx
-import { WorkerProps } from '@bigmistqke/worker-proxy'
+import type { WorkerProps } from '@bigmistqke/worker-proxy'
 
 // Return a function with prop-methods
 export default (
@@ -127,9 +127,9 @@ Await responses of WorkerProxy-methods with `worker.$async.method(...)`
 
 ```tsx
 import Worker from './worker?worker-proxy'
-import type WorkerApi from './worker'
+import type WorkerMethods from './worker'
 
-const worker = new Worker<typeof WorkerApi>()
+const worker = new Worker<typeof WorkerMethods>()
 
 // Call async version of ask-method
 worker.$async.ask('question').then(console.log)
@@ -154,9 +154,9 @@ Transfer `Transferables` to/from WorkerProxies with `$transfer(...)`
 ```tsx
 import { $transfer } from '@bigmistqke/worker-proxy'
 import Worker from './worker?worker-proxy'
-import type WorkerApi from './worker'
+import type WorkerMethods from './worker'
 
-const worker = new Worker<typeof WorkerApi>()
+const worker = new Worker<typeof WorkerMethods>()
 
 const buffer = new ArrayBuffer()
 
@@ -196,12 +196,12 @@ Expose a WorkerProxy's API to another WorkerProxy with `worker.$port()` and `cre
 ```tsx
 import { $transfer } from '@bigmistqke/worker-proxy'
 import HalloWorker from './hallo-worker?worker-proxy'
-import type HalloWorkerApi from './hallo-worker'
+import type HalloMethods from './hallo-worker'
 import GoodbyeWorker from './goodbye-worker?worker-proxy'
-import type GoodbyeWorkerApi from './goodbye-worker'
+import type GoodbyeMethods from './goodbye-worker'
 
-const halloWorker = new HalloWorker<typeof HalloWorkerApi>()
-const goodbyeWorker = new GoodbyeWorker<typeof GoodbyeWorkerApi>()
+const halloWorker = new HalloWorker<typeof HalloMethods>()
+const goodbyeWorker = new GoodbyeWorker<typeof GoodbyeMethods>()
 
 // Get a WorkerProxyPort of goodbyeWorker
 const port = goodbyeWorker.$port()
@@ -215,17 +215,17 @@ halloWorker.hallo()
 **hallo-worker.ts**
 
 ```tsx
-import { WorkerProxy, WorkerProxyPort, createWorkerProxy } from '@bigmistqke/worker-proxy'
-import type GoodbyeWorkerApi from './goodbye-worker'
+import { type WorkerProxy, type WorkerProxyPort, createWorkerProxy } from '@bigmistqke/worker-proxy'
+import type GoodbyeMethods from './goodbye-worker'
 
-let goodbyeWorker: WorkerProxy<typeof GoodbyeWorkerApi>
+let goodbyeWorker: WorkerProxy<typeof GoodbyeMethods>
 
 export default {
   hallo() {
     console.log('hallo')
     setTimeout(() => goodbyeWorker.goodbye(), 1000)
   },
-  link(port: WorkerProxyPort<typeof GoodbyeWorkerApi>) {
+  link(port: WorkerProxyPort<typeof GoodbyeMethods>) {
     // Create WorkerProxy from the given WorkerProxyPort
     goodbyeWorker = createWorkerProxy(port)
   }
