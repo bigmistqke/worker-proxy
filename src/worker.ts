@@ -25,6 +25,7 @@ export default (
     return $transfer(buffer, [buffer])
   },
   link(hallo: WorkerProxyPort<typeof HalloWorker>) {
+    // @ts-ignore
     currentHallo = createWorkerProxy(hallo)
   }
 })

@@ -1,73 +1,20 @@
-import { Fn, WorkerProxy, WorkerProxyPort } from './types'
+import { $Transfer, Fn, WorkerProxy, WorkerProxyPort } from './types'
 
-export function getWorkerSource(filePath: string) {
-  return /* javascript */ `import getApi from '${filePath}'
-
-function isTransfer(value) {
-  return value && typeof value === 'object' && '$transfer' in value && value.$transfer
-}
-function postMessage(topic, data) {
-  if (isTransfer(data[0])) {
-    const [_data, transferables] = data[0]
-    self.postMessage(
-      {
-        topic,
-        data: _data
-      },
-      '/',
-      transferables
-    )
-  } else {
-    self.postMessage({
-      topic,
-      data
-    })
-  }
+export function generateWorkerSource(url: string) {
+  return /* javascript */ `import getWorkerMethods from '${url}'
+import { initWorker } from "../lib/source"
+initWorkerMethods(getWorkerMethods)`
 }
 
-function createProxy(callback) {
-  return new Proxy({}, {
-    get(_, property) {
-      if (typeof property === 'symbol') return
-      return callback(property)
-    }
-  })
-}
-
-const api = typeof getApi === 'function' ? getApi(createProxy(topic =>
-  (...data) => postMessage(topic, data)
-)) : getApi
-
-async function onMessage ({ data: { topic, data, name, port, id } }) {
-  if(port){
-    port.onmessage = onMessage
-    return
-  }
-  if (id !== undefined) {
-    try{
-      const result = await api[topic](...data)
-      postMessage(topic, result)
-    }catch(error){
-      self.postMessage({ id, error })
-    }
-    return
-  }
-  api[topic](...data)
-}
-
-self.onmessage = onMessage`
-}
-
-export function getClientSource(workerUrl: string) {
-  return /* javascript */ `
-import { createWorkerProxy } from "vite-plugin-worker-proxy/source"
-export default function(workers){
-  const worker = new Worker(${JSON.stringify(workerUrl)}, { type: 'module' });
+export function generateClientSource(url: string) {
+  return /* javascript */ `import { createWorkerProxy } from "vite-plugin-worker-proxy"
+export default function(){
+  const worker = new Worker(${JSON.stringify(url)}, { type: 'module' });
   return createWorkerProxy(worker)
 };`
 }
 
-export function createWorkerProxy<T extends Worker | WorkerProxyPort<Fn>>(worker: T) {
+export function createWorkerProxy<T extends Worker | WorkerProxyPort<any>>(worker: T) {
   let id = 0
   const pendingMessages: Record<
     string,
@@ -118,35 +65,32 @@ export function createWorkerProxy<T extends Worker | WorkerProxyPort<Fn>>(worker
 
   return createProxy<T extends WorkerProxyPort<Fn> ? WorkerProxy<T['$']> : WorkerProxy<T>>(
     topic => {
-      if (topic === 'postMessage') {
-        return worker.postMessage.bind(worker)
-      }
-      if (topic === '$port') {
-        return () => {
-          const messageChannel = new MessageChannel()
-          worker.postMessage({ port: messageChannel.port1 }, [messageChannel.port1])
-          return messageChannel.port2
-        }
-      }
-      if (topic === '$async') {
-        return asyncProxy
-      }
-      if (topic === '$on') {
-        return createProxy(property => {
-          return (callback: (...data: Array<unknown>) => void) => {
-            const abortController = new AbortController()
-            eventTarget.addEventListener(
-              property as string,
-              event => callback(...(event as Event & { detail: Array<unknown> }).detail),
-              {
-                signal: abortController.signal
-              }
-            )
-            return () => abortController.abort()
+      switch (topic) {
+        case '$port':
+          return () => {
+            const { port1, port2 } = new MessageChannel()
+            worker.postMessage({ port: port1 }, [port1])
+            return port2
           }
-        })
+        case '$async':
+          return asyncProxy
+        case '$on':
+          return createProxy(property => {
+            return (callback: (...data: Array<unknown>) => void) => {
+              const abortController = new AbortController()
+              eventTarget.addEventListener(
+                property as string,
+                event => callback(...(event as Event & { detail: Array<unknown> }).detail),
+                {
+                  signal: abortController.signal
+                }
+              )
+              return () => abortController.abort()
+            }
+          })
+        default:
+          return (...data: Array<any>) => postMessage(topic, data)
       }
-      return (...data: Array<any>) => postMessage(topic, data)
     }
   )
 }
@@ -161,7 +105,48 @@ export function createProxy<T extends object = object>(
   })
 }
 
-type $Transfer<T = Array<any>, U = Array<Transferable>> = [T, U] & { $transfer: true }
+export function isTransfer(value: any): value is $Transfer {
+  return value && typeof value === 'object' && '$transfer' in value && value.$transfer
+}
+
+export function initWorkerMethods(getApi: unknown) {
+  const api =
+    typeof getApi === 'function'
+      ? getApi(
+          createProxy(
+            topic =>
+              (...data: Array<unknown>) =>
+                postMessage(topic as string, data)
+          )
+        )
+      : getApi
+
+  function postMessage(topic: string, data: Array<unknown>) {
+    if (isTransfer(data[0])) {
+      self.postMessage({ topic, data: data[0][0] }, '/', data[0][1])
+    } else {
+      self.postMessage({ topic, data })
+    }
+  }
+  async function onMessage({ data: { topic, data, port, id } }: any) {
+    if (port) {
+      port.onmessage = onMessage
+      return
+    }
+    if (id !== undefined) {
+      try {
+        const result = await api[topic](...data)
+        postMessage(topic, result)
+      } catch (error) {
+        self.postMessage({ id, error })
+      }
+      return
+    }
+    api[topic](...data)
+  }
+
+  self.onmessage = onMessage
+}
 
 export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(
   ...args: [...T, U]
@@ -170,8 +155,4 @@ export function $transfer<const T extends Array<any>, const U extends Array<Tran
   const result = [args, transferables] as unknown as $Transfer<T, U>
   result.$transfer = true
   return result
-}
-
-function isTransfer(value: any): value is $Transfer {
-  return value && typeof value === 'object' && '$transfer' in value && value.$transfer
 }

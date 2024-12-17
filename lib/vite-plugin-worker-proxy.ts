@@ -1,9 +1,7 @@
-import virtual from '@rollup/plugin-virtual'
-import path from 'path'
-import { rollup } from 'rollup'
+import { promises as fs } from 'fs'
+import { basename, extname, resolve } from 'path'
 import type { Plugin } from 'vite'
-import { build } from 'vite'
-import { getClientSource, getWorkerSource } from './source'
+import { generateClientSource, generateWorkerSource } from './source'
 
 export default (): Plugin => {
   let isDev: boolean
@@ -17,79 +15,40 @@ export default (): Plugin => {
     },
 
     async load(id) {
-      if (id.endsWith('?worker_file&type=module')) {
-        const originalPath = id.replace('?worker_file&type=module', '')
+      if (isDev) {
+        if (id.endsWith('?worker_file&type=module')) {
+          const originalPath = id.replace('?worker_file&type=module', '')
+          // Return the wrapped worker source
+          return generateWorkerSource(originalPath)
+        } else if (id.endsWith('?worker-proxy')) {
+          const path = id.replace('?worker-proxy', '')
+          return generateClientSource(`${path}?worker_file&type=module`)
+        }
+      } else {
+        if (id.endsWith('?worker-proxy')) {
+          const path = id.replace('?worker-proxy', '')
+          const name = basename(path, extname(path))
 
-        // Return the wrapped worker source
-        return getWorkerSource(originalPath)
-      }
+          const workerName = `${name}.worker-proxy.js`
+          const workerPath = resolve(path.split('/').slice(0, -1).join('/'), `./${workerName}`)
 
-      if (id.endsWith('?worker-proxy')) {
-        const originalPath = id.replace('?worker-proxy', '')
-        const fileName = path.basename(originalPath, path.extname(originalPath))
+          // Make temporary worker-file
+          // NOTE: Should we do a check if a file with this name already exists?
+          await fs.writeFile(workerPath, generateWorkerSource(`./${name}`))
 
-        if (!isDev) {
-          // Production: Bundle worker file into standalone package
-          const bundledWorkerPath = path.resolve('dist', 'assets', `${fileName}.worker.js`)
-
-          const clientFileName = `${fileName}.worker-file.js`
-
-          const result = await build({
-            build: {
-              lib: {
-                entry: originalPath,
-                formats: ['es'],
-                fileName: clientFileName
-              },
-              outDir: path.dirname(bundledWorkerPath),
-              rollupOptions: {
-                output: {
-                  inlineDynamicImports: true // Ensures all imports are bundled
-                }
-              }
-            }
-          })
-
-          // @ts-ignore
-          const source = result[0].output[0].code
-
-          // Use the virtual plugin to define files in memory
-          const virtualPlugin = virtual({
-            [fileName]: source,
-            [`${fileName}.worker.js`]: getWorkerSource(`./${fileName}`)
-          })
-
-          const bundle = await rollup({ input: `${fileName}.worker.js`, plugins: [virtualPlugin] })
-
-          // Generate output
-          const { output } = await bundle.generate({
-            format: 'esm'
-          })
-
-          let code = ''
-
-          // Write bundled output to a file or display it
-          for (const chunkOrAsset of output) {
-            if (chunkOrAsset.type === 'chunk') {
-              code += chunkOrAsset.code
-            }
-          }
-
-          // Close the bundle
-          await bundle.close()
-
+          // Make chunk of worker-file
           this.emitFile({
-            type: 'asset',
-            fileName: `assets/${fileName}.worker.js`,
-            source: code
+            type: 'chunk',
+            fileName: `assets/${workerName}`,
+            id: workerPath
           })
+
+          // Remove temporary worker-file
+          await fs.rm(workerPath, { force: true })
 
           // Return client-side proxy pointing to bundled worker
-          return getClientSource(`./assets/${fileName}.worker.js`)
+          return generateClientSource(`./assets/${name}.worker-proxy.js`)
         }
-
-        // Development: Directly load worker dynamically
-        return getClientSource(`${originalPath}?worker_file&type=module`)
       }
     }
   }
