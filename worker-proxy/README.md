@@ -51,7 +51,7 @@ worker.log("hello", "bigmistqke")
 **worker.ts**
 
 ```tsx
-import { type WorkerProps, createWorkerMethods } from "@bigmistqke/worker-proxy"
+import { type WorkerProps, registerMethods } from "@bigmistqke/worker-proxy"
 
 const methods = {
   log(...args: Array<string>) {
@@ -60,7 +60,7 @@ const methods = {
 }
 
 // Initialize worker-methods
-createWorkerMethods(methods)
+registerMethods(methods)
 
 // Export types of methods to infer the WorkerProxy's type
 export type Methods = typeof methods
@@ -73,7 +73,7 @@ Subscribe to calls from WorkerProxy with `worker.$on(...)`
 **main.ts**
 
 ```tsx
-import type { Methods } from "./worker.ts"
+import type Methods from "./worker.ts"
 
 // Create WorkerProxy
 const worker = createWorkerProxy<Methods>(new Worker("./worker.ts"))
@@ -91,22 +91,23 @@ worker.ping(performance.now())
 **worker.ts**
 
 ```tsx
-import { type WorkerProps, createWorkerMethods } from "@bigmistqke/worker-proxy"
+import { type WorkerProps, registerMethods } from "@bigmistqke/worker-proxy"
 
-const methods = (
-  props: WorkerProps<{
-    pong: (timestamp: number) => void
-  }>,
-) => ({
-  ping(timestamp: number) {
-    console.log("ping", timestamp)
+// Export is only needed for types
+export default registerMethods(
+  (
+    props: WorkerProps<{
+      pong: (timestamp: number) => void
+    }>,
+  ) => ({
+    ping(timestamp: number) {
+      console.log("ping", timestamp)
 
-    // Call .pong prop-method
-    setTimeout(() => props.pong(performance.now()), 1000)
-  },
-})
-createWorkerMethods(methods)
-export type Methods = typeof methods
+      // Call .pong prop-method
+      setTimeout(() => props.pong(performance.now()), 1000)
+    },
+  }),
+)
 ```
 
 ## $async
@@ -116,7 +117,7 @@ Await responses of WorkerProxy-methods with `worker.$async.method(...)`
 **main.ts**
 
 ```tsx
-import type { Methods } from "./worker.ts"
+import type Methods from "./worker.ts"
 
 const worker = createWorkerProxy<Methods>(new Worker("./worker.ts"))
 
@@ -127,15 +128,13 @@ worker.$async.ask("question").then(console.log)
 **worker.ts**
 
 ```tsx
-import { createWorkerMethods } from "@bigmistqke/worker-proxy"
+import { registerMethods } from "@bigmistqke/worker-proxy"
 
-const methods = {
+export default registerMethods({
   ask(question: string) {
     return "Answer"
   },
-}
-createWorkerMethods(methods)
-export type Methods = typeof methods
+})
 ```
 
 ## $transfer
@@ -146,7 +145,7 @@ Transfer `Transferables` to/from WorkerProxies with `$transfer(...)`
 
 ```tsx
 import { $transfer } from "@bigmistqke/worker-proxy"
-import type { Methods } from "./worker.ts"
+import type Methods from "./worker.ts"
 
 const worker = createWorkerProxy<Methods>(new Worker("./worker.ts"))
 
@@ -162,10 +161,11 @@ worker.$async.getBuffer().then(console.log)
 **worker.ts**
 
 ```tsx
-import { createWorkerMethods } from "@bigmistqke/worker-proxy"
+import { registerMethods } from "@bigmistqke/worker-proxy"
 
 let buffer: ArrayBuffer
-const methods = {
+
+export default registerMethods({
   setBuffer(_buffer: ArrayBuffer) {
     buffer = _buffer
   },
@@ -173,9 +173,7 @@ const methods = {
     // Transfer buffer from worker back to main thread
     return $transfer(buffer, [buffer])
   },
-}
-createWorkerMethods(methods)
-export type Methods = typeof methods
+})
 ```
 
 ## $port
@@ -191,8 +189,8 @@ Expose a WorkerProxy's API to another WorkerProxy with `worker.$port()` and `cre
 
 ```tsx
 import { $transfer } from "@bigmistqke/worker-proxy"
-import type { HalloMethods } from "./hallo-worker.ts"
-import type { GoodbyeMethods } from "./goodbye-worker.ts"
+import type HalloMethods from "./hallo-worker.ts"
+import type GoodbyeMethods from "./goodbye-worker.ts"
 
 const halloWorker = createWorkerProxy<HalloMethods>(
   new Worker("./hallo-worker.ts"),
@@ -217,13 +215,13 @@ import {
   type WorkerProxy,
   type WorkerProxyPort,
   createWorkerProxy,
-  createWorkerMethods,
+  registerMethods,
 } from "@bigmistqke/worker-proxy"
-import type { GoodbyeMethods } from "./goodbye-worker"
+import type GoodbyeMethods from "./goodbye-worker"
 
 let goodbyeWorker: WorkerProxy<GoodbyeMethods>
 
-const methods = {
+export default registerMethods({
   hallo() {
     console.log("hallo")
     setTimeout(() => goodbyeWorker.goodbye(), 1000)
@@ -232,21 +230,17 @@ const methods = {
     // Create WorkerProxy from the given WorkerProxyPort
     goodbyeWorker = createWorkerProxy(port)
   },
-}
-createWorkerMethods(methods)
-export type HalloMethods = typeof methods
+})
 ```
 
 **goodbye-worker.ts**
 
 ```tsx
-import { createWorkerMethods } from "@bigmistqke/worker-proxy"
+import { registerMethods } from "@bigmistqke/worker-proxy"
 
-const methods = {
+export default registerMethods({
   goodbye() {
     console.log("goodbye")
   },
-}
-createWorkerMethods(methods)
-export type GoodbyeMethods = typeof methods
+})
 ```

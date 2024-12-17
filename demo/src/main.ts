@@ -1,11 +1,16 @@
-import WorkerApi from './worker.ts'
-import Worker from './worker.ts?worker-proxy'
+import { createWorkerProxy } from '@bigmistqke/worker-proxy'
+import type PluginMethods from './worker-methods.ts'
+import type VanillaMethods from './worker-vanilla.ts'
+import VanillaWorker from "./worker-vanilla.ts?worker"
+import PluginWorker from "./worker.ts?worker-proxy"
 
 async function example() {
-  // Create WorkerProxies
-  const worker = new Worker<typeof WorkerApi>()
-
-  // Call ping-method of worker
-  worker.ping(performance.now())
+  // Vanilla worker-proxy
+  const vanillaWorker = createWorkerProxy<typeof VanillaMethods>(new VanillaWorker())
+  vanillaWorker.ping(performance.now())
+  
+  // With vite plugin
+  const pluginWorker = new PluginWorker<typeof PluginMethods>()
+  pluginWorker.ping(performance.now())
 }
 example()

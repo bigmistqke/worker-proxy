@@ -4,8 +4,8 @@ import type { Plugin } from 'vite'
 
 function generateWorkerSource(url: string) {
   return /* javascript */ `import getWorkerMethods from '${url}'
-import { createWorkerMethods } from "@bigmistqke/worker-proxy"
-createWorkerMethods(getWorkerMethods)`
+import { registerMethods } from "@bigmistqke/worker-proxy"
+registerMethods(getWorkerMethods)`
 }
 
 function generateClientSource(url: string) {

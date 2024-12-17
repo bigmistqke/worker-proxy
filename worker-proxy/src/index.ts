@@ -15,7 +15,36 @@ function isTransfer(value: any): value is $Transfer {
   return value && typeof value === 'object' && '$transfer' in value && value.$transfer
 }
 
-export function createWorkerProxy<T extends Worker | WorkerProxyPort<any>>(worker: T) {
+/**
+ * Wraps a worker in a WorkerProxy.
+ * 
+ * Accepts either a
+ * - `Worker`
+ * - `string`: _will create a worker from given url_
+ * - `WorkerProxyPort`: _a MessagePort created by `workerProxy.$port()`_
+ * 
+ * When given a `Worker | string` you can type the proxy with a generic.
+ * When given a `WorkerProxyPort` it will infer the types 
+ * from the `WorkerProxy` that created the port.
+ * 
+ * @example
+ * 
+ * ```tsx
+ * import { createWorkerProxy } from "@bigmistqke/worker-proxy"
+ * import type Methods from "./worker.ts"
+ * 
+ * const workerProxy = createWorkerProxy<typeof Methods>(new Worker('./worker.ts'))
+ * const port = workerProxy.$port()
+ * 
+ * // type automatically inferred.
+ * const otherProxy = createWorkerProxy(port)
+ * ```
+ */
+export function createWorkerProxy<T extends WorkerProxyPort<any>>(input: T): WorkerProxy<T['$']>
+export function createWorkerProxy<T>(input: string | Worker): WorkerProxy<T>
+export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string) {
+  const worker = typeof input === 'string' ? new Worker(input) : input
+
   let id = 0
   const pendingMessages: Record<
     string,
@@ -64,7 +93,7 @@ export function createWorkerProxy<T extends Worker | WorkerProxyPort<any>>(worke
     eventTarget.dispatchEvent(new CustomEvent(topic, { detail: data }))
   }
 
-  return createProxy<T extends WorkerProxyPort<Fn> ? WorkerProxy<T['$']> : WorkerProxy<T>>(
+  return createProxy(
     topic => {
       switch (topic) {
         case '$port':
@@ -96,17 +125,45 @@ export function createWorkerProxy<T extends Worker | WorkerProxyPort<any>>(worke
   )
 }
 
-export function createWorkerMethods(getApi: unknown) {
-  const api =
-    typeof getApi === 'function'
-      ? getApi(
+/**
+ * Prepare worker for commands of `WorkerProxy` by registering the methods.
+ * 
+ * Accepts either 
+ * - an object of methods
+ * - a callback that 
+ *     - accepts an object of `self`-methods
+ *          - these can be subscribed to with `.$on` from the main thread.
+ *     - returns an object of methods
+ * 
+ * Returns the input, for ease of typing (see example)
+ * 
+ * @example 
+ * 
+ * ```tsx
+ * // worker.ts
+ * import { registerMethods } from '@bigmistqke/worker-proxy'
+ * 
+ * export default registerMethods({ hallo: () => console.log('hallo') })
+ * 
+ * // main.ts
+ * import { createWorkerProxy } from '@bigmistqke/worker-proxy'
+ * import type Methods from './worker.ts'
+ * 
+ * const workerProxy = createWorkerProxy<typeof Methods>(new Worker('./worker.ts'))
+ * workerProxy.hallo()
+ * ```
+ */
+export function registerMethods<T extends Record<string, Fn> | ((args: Record<string, Fn>) => Record<string, Fn>)>(getMethods: T) {
+  const api: Record<string, Fn> =
+    typeof getMethods === 'function'
+      ? getMethods(
           createProxy(
             topic =>
               (...data: Array<unknown>) =>
                 postMessage(topic as string, data)
           )
         )
-      : getApi
+      : getMethods
 
   function postMessage(topic: string, data: Array<unknown>) {
     if (isTransfer(data[0])) {
@@ -133,6 +190,9 @@ export function createWorkerMethods(getApi: unknown) {
   }
 
   self.onmessage = onMessage
+
+  // Return the argument for typing purposes 
+  return getMethods
 }
 
 export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(
