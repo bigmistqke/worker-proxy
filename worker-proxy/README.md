@@ -39,19 +39,19 @@ yarn add --dev @bigmistqke/worker-proxy
 **main.ts**
 
 ```tsx
-import type { Methods } from "./worker.ts"
+import type { Methods } from './worker.ts'
 
 // Create WorkerProxy
-const worker = createWorkerProxy<Methods>(new Worker("./worker.ts"))
+const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
 
 // Call log-method of worker
-worker.log("hello", "bigmistqke")
+worker.log('hello', 'bigmistqke')
 ```
 
 **worker.ts**
 
 ```tsx
-import { type WorkerProps, registerMethods } from "@bigmistqke/worker-proxy"
+import { type WorkerProps, registerMethods } from '@bigmistqke/worker-proxy'
 
 const methods = {
   log(...args: Array<string>) {
@@ -73,14 +73,14 @@ Subscribe to calls from WorkerProxy with `worker.$on(...)`
 **main.ts**
 
 ```tsx
-import type Methods from "./worker.ts"
+import type Methods from './worker.ts'
 
 // Create WorkerProxy
-const worker = createWorkerProxy<Methods>(new Worker("./worker.ts"))
+const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
 
 // Subscribe to .pong prop-method calls of worker
-worker.$on.pong((data) => {
-  console.log("pong", data)
+worker.$on.pong(data => {
+  console.log('pong', data)
   setTimeout(() => worker.ping(performance.now()), 1000)
 })
 
@@ -91,7 +91,7 @@ worker.ping(performance.now())
 **worker.ts**
 
 ```tsx
-import { type WorkerProps, registerMethods } from "@bigmistqke/worker-proxy"
+import { type WorkerProps, registerMethods } from '@bigmistqke/worker-proxy'
 
 // Export is only needed for types
 export default registerMethods(
@@ -101,7 +101,7 @@ export default registerMethods(
     }>,
   ) => ({
     ping(timestamp: number) {
-      console.log("ping", timestamp)
+      console.log('ping', timestamp)
 
       // Call .pong prop-method
       setTimeout(() => props.pong(performance.now()), 1000)
@@ -117,22 +117,22 @@ Await responses of WorkerProxy-methods with `worker.$async.method(...)`
 **main.ts**
 
 ```tsx
-import type Methods from "./worker.ts"
+import type Methods from './worker.ts'
 
-const worker = createWorkerProxy<Methods>(new Worker("./worker.ts"))
+const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
 
 // Call async version of ask-method
-worker.$async.ask("question").then(console.log)
+worker.$async.ask('question').then(console.log)
 ```
 
 **worker.ts**
 
 ```tsx
-import { registerMethods } from "@bigmistqke/worker-proxy"
+import { registerMethods } from '@bigmistqke/worker-proxy'
 
 export default registerMethods({
   ask(question: string) {
-    return "Answer"
+    return 'Answer'
   },
 })
 ```
@@ -144,10 +144,10 @@ Transfer `Transferables` to/from WorkerProxies with `$transfer(...)`
 **main.ts**
 
 ```tsx
-import { $transfer } from "@bigmistqke/worker-proxy"
-import type Methods from "./worker.ts"
+import { $transfer } from '@bigmistqke/worker-proxy'
+import type Methods from './worker.ts'
 
-const worker = createWorkerProxy<Methods>(new Worker("./worker.ts"))
+const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
 
 const buffer = new ArrayBuffer()
 
@@ -161,7 +161,7 @@ worker.$async.getBuffer().then(console.log)
 **worker.ts**
 
 ```tsx
-import { registerMethods } from "@bigmistqke/worker-proxy"
+import { registerMethods } from '@bigmistqke/worker-proxy'
 
 let buffer: ArrayBuffer
 
@@ -188,16 +188,12 @@ Expose a WorkerProxy's API to another WorkerProxy with `worker.$port()` and `cre
 **main.ts**
 
 ```tsx
-import { $transfer } from "@bigmistqke/worker-proxy"
-import type HalloMethods from "./hallo-worker.ts"
-import type GoodbyeMethods from "./goodbye-worker.ts"
+import { $transfer } from '@bigmistqke/worker-proxy'
+import type HalloMethods from './hallo-worker.ts'
+import type GoodbyeMethods from './goodbye-worker.ts'
 
-const halloWorker = createWorkerProxy<HalloMethods>(
-  new Worker("./hallo-worker.ts"),
-)
-const goodbyeWorker = createWorkerProxy<GoodbyeMethods>(
-  new Worker("./goodbye-worker.ts"),
-)
+const halloWorker = createWorkerProxy<HalloMethods>(new Worker('./hallo-worker.ts'))
+const goodbyeWorker = createWorkerProxy<GoodbyeMethods>(new Worker('./goodbye-worker.ts'))
 
 // Get a WorkerProxyPort of goodbyeWorker
 const port = goodbyeWorker.$port()
@@ -216,14 +212,14 @@ import {
   type WorkerProxyPort,
   createWorkerProxy,
   registerMethods,
-} from "@bigmistqke/worker-proxy"
-import type GoodbyeMethods from "./goodbye-worker"
+} from '@bigmistqke/worker-proxy'
+import type GoodbyeMethods from './goodbye-worker'
 
 let goodbyeWorker: WorkerProxy<GoodbyeMethods>
 
 export default registerMethods({
   hallo() {
-    console.log("hallo")
+    console.log('hallo')
     setTimeout(() => goodbyeWorker.goodbye(), 1000)
   },
   link(port: WorkerProxyPort<typeof GoodbyeWorkerApi>) {
@@ -236,11 +232,50 @@ export default registerMethods({
 **goodbye-worker.ts**
 
 ```tsx
-import { registerMethods } from "@bigmistqke/worker-proxy"
+import { registerMethods } from '@bigmistqke/worker-proxy'
 
 export default registerMethods({
   goodbye() {
-    console.log("goodbye")
+    console.log('goodbye')
+  },
+})
+```
+
+## Callbacks
+
+Callbacks are serialized and passed to the worker, but only when they are not embedded within objects or arrays.
+
+```tsx
+// ✅
+worker.callback(console.log)
+worker.callback('test', { id: 'user' }, console.log)
+
+// ❌
+worker.callback({ log: console.log })
+
+// ❌
+worker.callback([console.log])
+```
+
+**main.ts**
+
+```tsx
+import type Methods from './worker.ts'
+
+const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
+
+worker.callback(console.log)
+```
+
+**worker.ts**
+
+```tsx
+import { registerMethods } from '@bigmistqke/worker-proxy'
+
+export default registerMethods({
+  callback(cb: (message: string) => void) {
+    cb('hallo')
+    setTimeout(() => cb('world'), 1000)
   },
 })
 ```

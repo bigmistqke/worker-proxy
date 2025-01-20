@@ -241,3 +241,41 @@ export default {
   }
 }
 ```
+
+## Callbacks
+
+Callbacks are serialized and passed to the worker, but only when they are not embedded within objects or arrays.
+
+```tsx
+// ✅
+worker.callback(console.log)
+worker.callback('test', { id: 'user' }, console.log)
+
+// ❌
+worker.callback({ log: console.log })
+
+// ❌
+worker.callback([console.log])
+```
+
+**main.ts**
+
+```tsx
+import type Methods from './worker.ts'
+import Worker from './worker.ts?worker-proxy'
+
+const worker = new Worker<typeof Methods>()
+
+worker.callback(console.log)
+```
+
+**worker.ts**
+
+```tsx
+export default {
+  callback(cb: (message: string) => void) {
+    cb('hallo')
+    setTimeout(() => cb('world'), 1000)
+  }
+}
+```
