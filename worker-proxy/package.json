@@ -1,6 +1,6 @@
 {
   "name": "@bigmistqke/worker-proxy",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "type": "module",
   "description": "Improve worker DX with a proxy.",
   "module": "./dist/index.js",
