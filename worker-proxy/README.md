@@ -243,7 +243,7 @@ export default registerMethods({
 
 ## Callbacks
 
-Callbacks are serialized and passed to the worker, but only when they are not embedded within objects or arrays.
+Callbacks are automatically serialized and passed to the worker, but only when they are not embedded within an object/array.
 
 ```tsx
 // ✅
@@ -276,6 +276,34 @@ export default registerMethods({
   callback(cb: (message: string) => void) {
     cb('hallo')
     setTimeout(() => cb('world'), 1000)
+  },
+})
+```
+
+### Manually serialize/deserialize with `$callback` and `$apply`
+
+You can also manually serialize and deserialize with `$callback` and `$apply`. This can be handy if you prefer explicitness or if you want to pass a callback nested inside object/array.
+
+**main.ts**
+
+```tsx
+import type Methods from './worker.ts'
+import { $callback } from '@bigmistqke/worker-proxy'
+
+const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
+
+worker.callback({ log: $callback(console.log) })
+```
+
+**worker.ts**
+
+```tsx
+import { $apply, type Callback, registerMethods } from '@bigmistqke/worker-proxy'
+
+export default registerMethods({
+  callback({ log }: { log: Callback<(message: string) => void> }) {
+    $apply(log, 'hallo')
+    setTimeout(() => $apply(log, 'hallo'), 1000)
   },
 })
 ```

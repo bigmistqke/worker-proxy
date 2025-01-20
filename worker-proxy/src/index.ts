@@ -1,7 +1,7 @@
 export * from './types.js'
 import type { $Transfer, Fn, WorkerProxy, WorkerProxyPort } from './types.js'
 
-type Callback<T = Fn> = T & { [$CALLBACK]: number }
+export type Callback<T = Fn> = T & { [$CALLBACK]: number }
 
 const $CALLBACK = '$WORKER_PROXY_CALLBACK'
 let CALLBACK_ID = 0
@@ -133,13 +133,11 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
             const arg = args[i]
             // Serialize callbacks
             if (typeof arg === 'function') {
-              if (!($CALLBACK in arg)) {
-                CALLBACK_ID++
-                CALLBACK_MAP.set(CALLBACK_ID, arg)
-                arg[$CALLBACK] = CALLBACK_ID
-              }
+              const result = $callback(arg)
               args[i] = {
-                [$CALLBACK]: arg[$CALLBACK],
+                [$CALLBACK]: result[$CALLBACK],
+                // Add flag that it should automatically deserialize this callback
+                auto: true
               }
             }
           }
@@ -206,12 +204,10 @@ export function registerMethods<T extends Record<string, Fn> | ((args: any) => R
     }
 
     for (let i = 0; i < data.length; i++) {
-      const arg = data[i]
+      const callback = data[i]
       // Deserialize callback
-      if (typeof arg === 'object' && $CALLBACK in arg) {
-        data[i] = (...args: Array<any>) => {
-          self.postMessage({ callback: arg[$CALLBACK], args })
-        }
+      if (typeof callback === 'object' && $CALLBACK in callback && callback.auto) {
+        data[i] = (...args: Array<any>) => $apply(callback, ...args)
       }
     }
 
@@ -274,6 +270,20 @@ export function $transfer<const T extends Array<any>, const U extends Array<Tran
   const result = [args, transferables] as unknown as $Transfer<T, U>
   result.$transfer = true
   return result
+}
+
+export function $callback(callback: ((...args: Array<any>) => void) & { [$CALLBACK]?: number }){
+  let id = $CALLBACK in callback ? callback[$CALLBACK] : undefined
+  if(!id){
+    id = ++CALLBACK_ID
+    callback[$CALLBACK] = id
+    CALLBACK_MAP.set(id, callback as Callback)
+  } 
+  return {[$CALLBACK]: id} as unknown as Callback
+}
+
+export function $apply<T extends Callback>(callback: T, ...args: Parameters<T>){
+  self.postMessage({ callback: callback[$CALLBACK], args })
 }
 
 export function $dispose(callback: ((...args: Array<any>) => void) & { [$CALLBACK]?: number }) {
