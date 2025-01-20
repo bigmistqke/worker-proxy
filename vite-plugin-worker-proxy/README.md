@@ -10,7 +10,7 @@ Vite plugin integration of `@bigmistqke/worker-proxy`, automatically wrapping th
 - [$transfer](#transfer) _Transfer `Transferables`_
 - [$async](#async) _Await responses of worker-methods_
 - [$port](#port) _Expose a WorkerProxy's api to another WorkerProxy_
-- [Callback](#callback) _Serialize callbacks to workers_
+- [Callbacks](#callbacks) _Serialize callbacks to workers_
 
 ## Getting Started
 
