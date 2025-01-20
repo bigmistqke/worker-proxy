@@ -287,10 +287,3 @@ export function $callback(callback: ((...args: Array<any>) => void) & { [$CALLBA
 export function $apply<T extends Callback>(callback: T, ...args: Parameters<T>){
   self.postMessage({ callback: callback[$CALLBACK], args })
 }
-
-export function $dispose(callback: ((...args: Array<any>) => void) & { [$CALLBACK]?: number }) {
-  const id = $CALLBACK in callback ? callback[$CALLBACK] : undefined
-  if (id !== undefined) {
-    CALLBACK_MAP.delete(id)
-  }
-}
