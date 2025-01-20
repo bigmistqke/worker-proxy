@@ -5,7 +5,8 @@ export type Callback<T = Fn> = T & { [$CALLBACK]: number }
 
 const $CALLBACK = '$WORKER_PROXY_CALLBACK'
 let CALLBACK_ID = 0
-const CALLBACK_MAP = new Map<number, Callback>()
+const CALLBACK_MAP = new Map<number, WeakRef<Callback>>()
+const finalizationRegistry = new FinalizationRegistry((id: number) => CALLBACK_MAP.delete(id));
 
 function createProxy<T extends object = object>(callback: (property: string | symbol) => void) {
   return new Proxy({} as T, {
@@ -57,7 +58,7 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
   const eventTarget = new EventTarget()
 
   function postMessage(topic: string | symbol, data: $Transfer | Array<any>, id?: number) {
-    if (isTransfer(data[0])) {
+    if (data[0] && isTransfer(data[0])) {
       const [_data, transferables] = data[0]
       worker.postMessage(
         {
@@ -88,7 +89,7 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
 
   worker.onmessage = ({ data: { topic, data, id, error, callback, args } }) => {
     if (callback || args) {
-      CALLBACK_MAP.get(callback)?.(...args)
+      CALLBACK_MAP.get(callback)?.deref()?.(...args)
       return
     }
     if (pendingMessages[id]) {
@@ -191,7 +192,7 @@ export function registerMethods<T extends Record<string, Fn> | ((args: any) => R
       : getMethods
 
   function postMessage(topic: string, data: Array<unknown>, id?: number) {
-    if (isTransfer(data[0])) {
+    if (data && isTransfer(data[0])) {
       self.postMessage({ topic, data: data[0][0], id }, '/', data[0][1])
     } else {
       self.postMessage({ topic, data, id })
@@ -277,7 +278,8 @@ export function $callback(callback: ((...args: Array<any>) => void) & { [$CALLBA
   if(!id){
     id = ++CALLBACK_ID
     callback[$CALLBACK] = id
-    CALLBACK_MAP.set(id, callback as Callback)
+    CALLBACK_MAP.set(id, new WeakRef(callback as Callback))
+    finalizationRegistry.register(callback, id)
   } 
   return {[$CALLBACK]: id} as unknown as Callback
 }

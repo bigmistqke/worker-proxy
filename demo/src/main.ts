@@ -12,4 +12,8 @@ import PluginWorker from "./worker-plugin.ts?worker-proxy"
 
 const pluginWorker = new PluginWorker<typeof PluginMethods>()
 pluginWorker.ping(performance.now())
-pluginWorker.callback($callback((value: string) => console.log(value)))
+
+setInterval(async () => {
+  const cb = $callback((value: string) => console.log(value))
+  await pluginWorker.$async.callback(cb)
+}, 500)
