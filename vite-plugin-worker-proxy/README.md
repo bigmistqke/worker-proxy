@@ -10,6 +10,7 @@ Vite plugin integration of `@bigmistqke/worker-proxy`, automatically wrapping th
 - [$transfer](#transfer) _Transfer `Transferables`_
 - [$async](#async) _Await responses of worker-methods_
 - [$port](#port) _Expose a WorkerProxy's api to another WorkerProxy_
+- [Callback](#callback) _Serialize callbacks to workers_
 
 ## Getting Started
 
@@ -74,49 +75,6 @@ export default {
     console.log(...args)
   }
 }
-```
-
-## $on
-
-Subscribe to calls from WorkerProxy with `worker.$on(...)`
-
-**main.ts**
-
-```tsx
-import Worker from './worker?worker-proxy'
-import type WorkerMethods from './worker'
-
-// Create WorkerProxy
-const worker = new Worker<typeof WorkerMethods>()
-
-// Subscribe to .pong prop-method calls of worker
-worker.$on.pong(data => {
-  console.log('pong', data)
-  setTimeout(() => worker.ping(performance.now()), 1000)
-})
-
-// Call .ping-method of worker
-worker.ping(performance.now())
-```
-
-**worker.ts**
-
-```tsx
-import type { WorkerProps } from '@bigmistqke/worker-proxy'
-
-// Return a function with prop-methods
-export default (
-  props: WorkerProps<{
-    pong: (timestamp: number) => void
-  }>
-) => ({
-  ping(timestamp: number) {
-    console.log('ping', timestamp)
-
-    // Call .pong prop-method
-    setTimeout(() => props.pong(performance.now()), 1000)
-  }
-})
 ```
 
 ## $async

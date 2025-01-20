@@ -6,10 +6,10 @@ Library to improve worker DX, similar to [ComLink](https://github.com/GoogleChro
 
 - [Getting Started](#getting-started)
 - [Basic Example](#basics)
-- [$on](#on) _Subscribe to calls_
 - [$transfer](#transfer) _Transfer `Transferables`_
 - [$async](#async) _Await responses of worker-methods_
 - [$port](#port) _Expose a WorkerProxy's api to another WorkerProxy_
+- [Callback](#callback) _Serialize callbacks to workers_
 
 ## Getting Started
 
@@ -64,50 +64,6 @@ registerMethods(methods)
 
 // Export types of methods to infer the WorkerProxy's type
 export type Methods = typeof methods
-```
-
-## $on
-
-Subscribe to calls from WorkerProxy with `worker.$on(...)`
-
-**main.ts**
-
-```tsx
-import type Methods from './worker.ts'
-
-// Create WorkerProxy
-const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
-
-// Subscribe to .pong prop-method calls of worker
-worker.$on.pong(data => {
-  console.log('pong', data)
-  setTimeout(() => worker.ping(performance.now()), 1000)
-})
-
-// Call .ping-method of worker
-worker.ping(performance.now())
-```
-
-**worker.ts**
-
-```tsx
-import { type WorkerProps, registerMethods } from '@bigmistqke/worker-proxy'
-
-// Export is only needed for types
-export default registerMethods(
-  (
-    props: WorkerProps<{
-      pong: (timestamp: number) => void
-    }>,
-  ) => ({
-    ping(timestamp: number) {
-      console.log('ping', timestamp)
-
-      // Call .pong prop-method
-      setTimeout(() => props.pong(performance.now()), 1000)
-    },
-  }),
-)
 ```
 
 ## $async

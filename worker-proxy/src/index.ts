@@ -6,7 +6,7 @@ export type Callback<T = Fn> = T & { [$CALLBACK]: number }
 const $CALLBACK = '$WORKER_PROXY_CALLBACK'
 let CALLBACK_ID = 0
 const CALLBACK_MAP = new Map<number, WeakRef<Callback>>()
-const finalizationRegistry = new FinalizationRegistry((id: number) => CALLBACK_MAP.delete(id));
+const finalizationRegistry = new FinalizationRegistry((id: number) => CALLBACK_MAP.delete(id))
 
 function createProxy<T extends object = object>(callback: (property: string | symbol) => void) {
   return new Proxy({} as T, {
@@ -58,7 +58,7 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
   const eventTarget = new EventTarget()
 
   function postMessage(topic: string | symbol, data: $Transfer | Array<any>, id?: number) {
-    if (data[0] && isTransfer(data[0])) {
+    if (data && isTransfer(data[0])) {
       const [_data, transferables] = data[0]
       worker.postMessage(
         {
@@ -114,20 +114,6 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
         }
       case '$async':
         return asyncProxy
-      case '$on':
-        return createProxy(property => {
-          return (callback: (...data: Array<unknown>) => void) => {
-            const abortController = new AbortController()
-            eventTarget.addEventListener(
-              property as string,
-              event => callback(...(event as Event & { detail: Array<unknown> }).detail),
-              {
-                signal: abortController.signal,
-              },
-            )
-            return () => abortController.abort()
-          }
-        })
       default:
         return (...args: Array<any>) => {
           for (let i = 0; i < args.length; i++) {
@@ -138,7 +124,7 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
               args[i] = {
                 [$CALLBACK]: result[$CALLBACK],
                 // Add flag that it should automatically deserialize this callback
-                auto: true
+                auto: true,
               }
             }
           }
@@ -151,13 +137,7 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
 /**
  * Prepare worker for commands of `WorkerProxy` by registering its methods.
  *
- * Accepts either
- * - An object of methods
- * - A callback that
- *     - Accepts an object of methods
- *         - When called these call back to the main thread
- *         - These can be subscribed to with `workerProxy.$on.method`
- *     - Returns an object of methods
+ * Accepts an object of methods
  *
  * Returns the input, for ease of typing:
  *
@@ -177,20 +157,7 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
  * workerProxy.hallo()
  * ```
  */
-export function registerMethods<T extends Record<string, Fn> | ((args: any) => Record<string, Fn>)>(
-  getMethods: T,
-) {
-  const api: Record<string, Fn> =
-    typeof getMethods === 'function'
-      ? getMethods(
-          createProxy(
-            topic =>
-              (...data: Array<unknown>) =>
-                postMessage(topic as string, data),
-          ),
-        )
-      : getMethods
-
+export function registerMethods<T extends Record<string, Fn>>(api: T) {
   function postMessage(topic: string, data: Array<unknown>, id?: number) {
     if (data && isTransfer(data[0])) {
       self.postMessage({ topic, data: data[0][0], id }, '/', data[0][1])
@@ -214,7 +181,7 @@ export function registerMethods<T extends Record<string, Fn> | ((args: any) => R
 
     if (id !== undefined) {
       try {
-        const result = await api[topic](...data)
+        const result = await api[topic]!(...data)
         postMessage(topic, result, id)
       } catch (error) {
         self.postMessage({ id, error })
@@ -222,13 +189,13 @@ export function registerMethods<T extends Record<string, Fn> | ((args: any) => R
       return
     }
 
-    api[topic](...data)
+    api[topic]!(...data)
   }
 
   self.onmessage = onMessage
 
   // Return the argument for typing purposes
-  return getMethods
+  return api
 }
 
 /**
@@ -264,26 +231,24 @@ export function registerMethods<T extends Record<string, Fn> | ((args: any) => R
  * }
  * ```
  */
-export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(
-  ...args: [...T, U]
-) {
+export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(...args: [...T, U]) {
   const transferables = args.pop()
   const result = [args, transferables] as unknown as $Transfer<T, U>
   result.$transfer = true
   return result
 }
 
-export function $callback(callback: ((...args: Array<any>) => void) & { [$CALLBACK]?: number }){
+export function $callback(callback: ((...args: Array<any>) => void) & { [$CALLBACK]?: number }) {
   let id = $CALLBACK in callback ? callback[$CALLBACK] : undefined
-  if(!id){
+  if (!id) {
     id = ++CALLBACK_ID
     callback[$CALLBACK] = id
     CALLBACK_MAP.set(id, new WeakRef(callback as Callback))
     finalizationRegistry.register(callback, id)
-  } 
-  return {[$CALLBACK]: id} as unknown as Callback
+  }
+  return { [$CALLBACK]: id } as unknown as Callback
 }
 
-export function $apply<T extends Callback>(callback: T, ...args: Parameters<T>){
+export function $apply<T extends Callback>(callback: T, ...args: Parameters<T>) {
   self.postMessage({ callback: callback[$CALLBACK], args })
 }

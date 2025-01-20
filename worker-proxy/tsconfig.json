@@ -1,20 +1,23 @@
 {
   "compilerOptions": {
-    "target": "es2020",
-    "allowImportingTsExtensions": true,
-    "allowJs": true,
-    "esModuleInterop": true,
-    "lib": ["ESNext", "DOM"],
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "noEmit": true,
-    "noImplicitAny": true,
-    "noUnusedLocals": true,
-    "outDir": "dist",
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
     "strict": true,
-    "verbatimModuleSyntax": true,
-    "types": ["vitest/globals"]
+    "target": "ESNext",
+    "module": "ESNext",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": true,
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "baseUrl": ".",
+    "paths": {
+      "src": ["./src"]
+    }
   }
 }
