@@ -1,5 +1,5 @@
 // Vanilla worker-proxy
-import { createWorkerProxy } from '@bigmistqke/worker-proxy'
+import { $callback, createWorkerProxy } from '@bigmistqke/worker-proxy'
 import type VanillaMethods from './worker-vanilla.ts'
 import VanillaWorker from "./worker-vanilla.ts?worker"
 
@@ -12,3 +12,4 @@ import PluginWorker from "./worker-plugin.ts?worker-proxy"
 
 const pluginWorker = new PluginWorker<typeof PluginMethods>()
 pluginWorker.ping(performance.now())
+pluginWorker.callback($callback((value: string) => console.log(value)))
