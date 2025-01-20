@@ -14,7 +14,7 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "dependencies": {
-    "@bigmistqke/vite-plugin-worker-proxy": "../vite-plugin-worker-proxy",
-    "@bigmistqke/worker-proxy": "../worker-proxy"
+    "@bigmistqke/vite-plugin-worker-proxy": "file://../vite-plugin-worker-proxy",
+    "@bigmistqke/worker-proxy": "file://../worker-proxy"
   }
 }

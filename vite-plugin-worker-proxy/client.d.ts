@@ -1,6 +1,9 @@
 declare module '*?worker-proxy' {
   type WorkerProxyPort<T> = MessagePort & { $: T }
-  type $Transfer<T = Array<any>, U = Array<Transferable>> = [T, U] & { $transfer: true }
+  type $Transfer<T = Array<any>, U = Array<Transferable>> = T & {
+    $transferables: U
+  }
+
   type Fn = (...arg: Array<any>) => any
 
   type SyncMethods<T extends Record<string, Fn>> = {
@@ -18,12 +21,6 @@ declare module '*?worker-proxy' {
     }
     $port: () => WorkerProxyPort<Methods>
   }
-  const workerApi: new <T>() => T extends (...args: Array<any>) => infer U
-    ? U extends Record<string, Fn>
-      ? WorkerProxy<U, Parameters<T>[0]>
-      : never
-    : T extends Record<string, Fn>
-    ? WorkerProxy<T>
-    : never
+  const workerApi: new <T>() => T extends Record<string, Fn> ? WorkerProxy<T> : never
   export default workerApi
 }

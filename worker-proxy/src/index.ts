@@ -1,11 +1,9 @@
 export * from './types.js'
-import type { $Transfer, Fn, WorkerProxy, WorkerProxyPort } from './types.js'
+import { $CALLBACK } from './constants.js'
+import type { $Callback, $Transfer, Fn, WorkerProxy, WorkerProxyPort } from './types.js'
 
-export type Callback<T = Fn> = T & { [$CALLBACK]: number }
-
-const $CALLBACK = '$WORKER_PROXY_CALLBACK'
 let CALLBACK_ID = 0
-const CALLBACK_MAP = new Map<number, WeakRef<Callback>>()
+const CALLBACK_MAP = new Map<number, WeakRef<$Callback>>()
 const finalizationRegistry = new FinalizationRegistry((id: number) => CALLBACK_MAP.delete(id))
 
 function createProxy<T extends object = object>(callback: (property: string | symbol) => void) {
@@ -17,7 +15,7 @@ function createProxy<T extends object = object>(callback: (property: string | sy
 }
 
 function isTransfer(value: any): value is $Transfer {
-  return value && typeof value === 'object' && '$transfer' in value && value.$transfer
+  return Array.isArray(value) && '$transferable' in value
 }
 
 /**
@@ -59,14 +57,13 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
 
   function postMessage(topic: string | symbol, data: $Transfer | Array<any>, id?: number) {
     if (data && isTransfer(data[0])) {
-      const [_data, transferables] = data[0]
       worker.postMessage(
         {
           topic,
-          data: _data,
+          data: data[0],
           id,
         },
-        transferables,
+        data[0].$transferables,
       )
     } else {
       worker.postMessage({
@@ -233,8 +230,8 @@ export function registerMethods<T extends Record<string, Fn>>(api: T) {
  */
 export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(...args: [...T, U]) {
   const transferables = args.pop()
-  const result = [args, transferables] as unknown as $Transfer<T, U>
-  result.$transfer = true
+  const result = args as unknown as $Transfer<T, U>
+  result.$transferables = transferables as U
   return result
 }
 
@@ -243,12 +240,12 @@ export function $callback(callback: ((...args: Array<any>) => void) & { [$CALLBA
   if (!id) {
     id = ++CALLBACK_ID
     callback[$CALLBACK] = id
-    CALLBACK_MAP.set(id, new WeakRef(callback as Callback))
+    CALLBACK_MAP.set(id, new WeakRef(callback as $Callback))
     finalizationRegistry.register(callback, id)
   }
-  return { [$CALLBACK]: id } as unknown as Callback
+  return { [$CALLBACK]: id } as unknown as $Callback
 }
 
-export function $apply<T extends Callback>(callback: T, ...args: Parameters<T>) {
+export function $apply<T extends $Callback>(callback: T, ...args: Parameters<T>) {
   self.postMessage({ callback: callback[$CALLBACK], args })
 }

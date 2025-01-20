@@ -1,0 +1,1 @@
+export const $CALLBACK = '$WORKER_PROXY_CALLBACK'

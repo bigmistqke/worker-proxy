@@ -8,9 +8,6 @@ importers:
 
   .:
     devDependencies:
-      '@egoist/prettier-config':
-        specifier: 1.0.0
-        version: 1.0.0
       prettier:
         specifier: 2.8.4
         version: 2.8.4
@@ -25,9 +22,6 @@ importers:
         version: 0.28.5
 
 packages:
-
-  '@egoist/prettier-config@1.0.0':
-    resolution: {integrity: sha512-D1Tp9Jv4aVoEo3cOAO966gFCI0wx/1lZ6sEHX8uMAfyVxuxD2+knGxhfGlb/FNLxWV3ifSI5hOmB/zFfsi7Rzw==}
 
   '@esbuild/android-arm64@0.17.19':
     resolution: {integrity: sha512-KBMWvEZooR7+kzY0BtbTQn0OAYY7CsiydT63pVEaPtVYF0hXbUaOyZog37DKxK7NF3XacBJOpYT4adIJh+avxA==}
@@ -981,8 +975,6 @@ packages:
     engines: {node: '>=12.20'}
 
 snapshots:
-
-  '@egoist/prettier-config@1.0.0': {}
 
   '@esbuild/android-arm64@0.17.19':
     optional: true
