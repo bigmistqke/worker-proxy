@@ -3,8 +3,7 @@ import { $CALLBACK } from './constants.js'
 import type { $Callback, $Transfer, Fn, WorkerProxy, WorkerProxyPort } from './types.js'
 
 let CALLBACK_ID = 0
-const CALLBACK_MAP = new Map<number, WeakRef<$Callback>>()
-const finalizationRegistry = new FinalizationRegistry((id: number) => CALLBACK_MAP.delete(id))
+const CALLBACK_MAP = new Map<number, $Callback>()
 
 function createProxy<T extends object = object>(callback: (property: string | symbol) => void) {
   return new Proxy({} as T, {
@@ -86,7 +85,7 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
 
   worker.onmessage = ({ data: { topic, data, id, error, callback, args } }) => {
     if (callback || args) {
-      CALLBACK_MAP.get(callback)?.deref()?.(...args)
+      CALLBACK_MAP.get(callback)?.(...args)
       return
     }
     if (pendingMessages[id]) {
@@ -228,7 +227,9 @@ export function registerMethods<T extends Record<string, Fn>>(api: T) {
  * }
  * ```
  */
-export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(...args: [...T, U]) {
+export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(
+  ...args: [...T, U]
+) {
   const transferables = args.pop()
   const result = args as unknown as $Transfer<T, U>
   result.$transferables = transferables as U
@@ -240,8 +241,7 @@ export function $callback(callback: ((...args: Array<any>) => void) & { [$CALLBA
   if (!id) {
     id = ++CALLBACK_ID
     callback[$CALLBACK] = id
-    CALLBACK_MAP.set(id, new WeakRef(callback as $Callback))
-    finalizationRegistry.register(callback, id)
+    CALLBACK_MAP.set(id, callback as $Callback)
   }
   return { [$CALLBACK]: id } as unknown as $Callback
 }
