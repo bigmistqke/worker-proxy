@@ -39,7 +39,7 @@ yarn add --dev @bigmistqke/worker-proxy
 **main.ts**
 
 ```tsx
-import type { Methods } from './worker.ts'
+import type Methods from './worker.ts'
 
 // Create WorkerProxy
 const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
@@ -62,18 +62,14 @@ class Logger {
   }
 }
 
-const methods = {
+// Initialize worker-methods with registerMethods
+// Default export types of methods to infer the WorkerProxy's type
+export default registerMethods({
   logger: new Logger(),
   ping() {
     console.log('ping')
   },
-}
-
-// Initialize worker-methods
-registerMethods(methods)
-
-// Export types of methods to infer the WorkerProxy's type
-export type Methods = typeof methods
+})
 ```
 
 <details>

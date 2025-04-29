@@ -11,6 +11,9 @@ vanillaWorker.transfer($transfer(buffer1, [buffer1]))
 vanillaWorker.logger.log('hello from vanilla worker')
 vanillaWorker.logger.test.$async.hello().then((world) => console.log('vanilla worker async method', world))
 
+vanillaWorker.callback((value) => console.log('callback from vanilla-worker', value))
+vanillaWorker.nestedCallback({cb: $callback((value: string) => console.log('nested callback from vanilla-worker', value))})
+
 // With vite-plugin
 import type PluginMethods from './worker-plugin.ts'
 import PluginWorker from "./worker-plugin.ts?worker-proxy"
@@ -21,13 +24,11 @@ pluginWorker.ping(performance.now())
 const buffer = new ArrayBuffer()
 pluginWorker.transfer($transfer(buffer, [buffer]))
 
-pluginWorker.plugins[0].log('hello from plugin worker')
-pluginWorker.plugins[0].test.$async.hello().then((world) => console.log('plugin worker async method', world))
+pluginWorker.logger.log('hello from plugin worker')
+pluginWorker.logger.test.$async.hello().then((world) => console.log('plugin worker async method', world))
 
-setInterval(async () => {
-  const cb = $callback((value: string) => console.log('ping', value))
-  await pluginWorker.$async.callback(cb)
-}, 500)
+pluginWorker.callback((value) => console.log('callback from plugin-worker', value))
+pluginWorker.nestedCallback({cb: $callback((value: string) => console.log('nested callback from plugin-worker', value))})
 
 
 
