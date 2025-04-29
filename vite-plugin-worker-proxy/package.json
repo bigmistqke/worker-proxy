@@ -1,6 +1,6 @@
 {
   "name": "@bigmistqke/vite-plugin-worker-proxy",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "type": "module",
   "description": "Vite integration of @bigmistqke/worker-proxy.",
   "main": "./dist/index.cjs",
@@ -24,7 +24,7 @@
     "typescript": "^5.5.3"
   },
   "peerDependencies": {
-    "@bigmistqke/worker-proxy": "^0.0.11",
+    "@bigmistqke/worker-proxy": "^0.0.13",
     "vite": "^5.4.2"
   },
   "dependencies": {

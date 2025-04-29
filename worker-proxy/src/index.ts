@@ -1,20 +1,26 @@
-export * from './types.js'
-import { $CALLBACK } from './constants.js'
-import type { $Callback, $Transfer, Fn, WorkerProxy, WorkerProxyPort } from './types.js'
+export * from './types.js';
+import { $CALLBACK } from './constants.js';
+import type { $Callback, $Transfer, Api, Fn, WorkerProxy, WorkerProxyPort } from './types.js';
 
-let CALLBACK_ID = 0
-const CALLBACK_MAP = new Map<number, $Callback>()
+let CALLBACK_ID = 0;
+const CALLBACK_MAP = new Map<number, $Callback>();
 
-function createProxy<T extends object = object>(callback: (property: string | symbol) => void) {
-  return new Proxy({} as T, {
+function createProxy<T extends object = object>(
+  get: (property: string | symbol) => void,
+  apply?: (...args: any[]) => any,
+) {
+  return new Proxy(function(){}, {
     get(_, property) {
-      return callback(property)
+      return get(property);
     },
-  })
+    apply(_, thisArg, argArray) {
+      return apply?.(...argArray);
+    },
+  });
 }
 
 function isTransfer(value: any): value is $Transfer {
-  return Array.isArray(value) && '$transferable' in value
+  return Array.isArray(value) && "$transferable" in value;
 }
 
 /**
@@ -42,92 +48,105 @@ function isTransfer(value: any): value is $Transfer {
  * const otherProxy = createWorkerProxy(port)
  * ```
  */
-export function createWorkerProxy<T extends WorkerProxyPort<any>>(input: T): WorkerProxy<T['$']>
-export function createWorkerProxy<T>(input: string | Worker): WorkerProxy<T>
-export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string) {
-  const worker = typeof input === 'string' ? new Worker(input) : input
+export function createWorkerProxy<const T extends WorkerProxyPort<any>>(
+  input: T,
+): WorkerProxy<T["$"]>;
+export function createWorkerProxy<const T>(input: string | Worker): WorkerProxy<T>;
+export function createWorkerProxy(
+  input: WorkerProxyPort<any> | Worker | string,
+) {
+  const worker = typeof input === "string" ? new Worker(input) : input;
 
-  let id = 0
+  let id = 0;
   const pendingMessages: Record<
     string,
     { resolve: (value: unknown) => void; reject: (value: unknown) => void }
-  > = {}
-  const eventTarget = new EventTarget()
+  > = {};
+  const eventTarget = new EventTarget();
 
-  function postMessage(topic: string | symbol, data: $Transfer | Array<any>, id?: number) {
+  function postMessage(
+    topics: Array<string | number | symbol>,
+    data: $Transfer | Array<any>,
+    id?: number,
+  ) {
     if (data && isTransfer(data[0])) {
       worker.postMessage(
         {
-          topic,
+          topics,
           data: data[0],
           id,
         },
         data[0].$transferables,
-      )
+      );
     } else {
       worker.postMessage({
-        topic,
+        topics,
         data,
         id,
-      })
+      });
     }
   }
-
-  const asyncProxy = createProxy(topic => {
-    return (...data: Array<unknown>) => {
-      id++
-      postMessage(topic, data, id)
-      return new Promise((resolve, reject) => {
-        pendingMessages[id] = { resolve, reject }
-      })
-    }
-  })
 
   worker.onmessage = ({ data: { topic, data, id, error, callback, args } }) => {
     if (callback || args) {
-      CALLBACK_MAP.get(callback)?.(...args)
-      return
+      CALLBACK_MAP.get(callback)?.(...args);
+      return;
     }
     if (pendingMessages[id]) {
       if (error) {
-        pendingMessages[id].reject(error)
+        pendingMessages[id].reject(error);
       } else {
-        pendingMessages[id].resolve(data)
+        pendingMessages[id].resolve(data);
       }
-      delete pendingMessages[id]
-      return
+      delete pendingMessages[id];
+      return;
     }
-    eventTarget.dispatchEvent(new CustomEvent(topic, { detail: data }))
-  }
+    eventTarget.dispatchEvent(new CustomEvent(topic, { detail: data }));
+  };
 
-  return createProxy(topic => {
-    switch (topic) {
-      case '$port':
-        return () => {
-          const { port1, port2 } = new MessageChannel()
-          worker.postMessage({ port: port1 }, [port1])
-          return port2
+  function step<T extends object>(topics: (string | number | symbol)[]){
+    const asyncProxy = createProxy((topic) => {
+      return (...data: Array<unknown>) => {
+        id++;
+        postMessage([...topics, topic], data, id);
+        return new Promise((resolve, reject) => {
+          pendingMessages[id] = { resolve, reject };
+        });
+      };
+    });
+    return createProxy<T>(
+      (topic) => {
+        switch (topic) {
+          case "$port":
+            return () => {
+              const { port1, port2 } = new MessageChannel();
+              worker.postMessage({ port: port1 }, [port1]);
+              return port2;
+            };
+          case "$async":
+            return asyncProxy;
+          default:
+            return step([...topics, topic]);
         }
-      case '$async':
-        return asyncProxy
-      default:
-        return (...args: Array<any>) => {
-          for (let i = 0; i < args.length; i++) {
-            const arg = args[i]
-            // Serialize callbacks
-            if (typeof arg === 'function') {
-              const result = $callback(arg)
-              args[i] = {
-                [$CALLBACK]: result[$CALLBACK],
-                // Add flag that it should automatically deserialize this callback
-                auto: true,
-              }
-            }
+      },
+      (...args) => {
+        for (let i = 0; i < args.length; i++) {
+          const arg = args[i];
+          // Serialize callbacks
+          if (typeof arg === "function") {
+            const result = $callback(arg);
+            args[i] = {
+              [$CALLBACK]: result[$CALLBACK],
+              // Add flag that it should automatically deserialize this callback
+              auto: true,
+            };
           }
-          return postMessage(topic, args)
         }
-    }
-  })
+        return postMessage(topics, args);
+      },
+    );
+  }
+  return step([]);
 }
 
 /**
@@ -153,45 +172,63 @@ export function createWorkerProxy(input: WorkerProxyPort<any> | Worker | string)
  * workerProxy.hallo()
  * ```
  */
-export function registerMethods<T extends Record<string, Fn>>(api: T) {
-  function postMessage(topic: string, data: Array<unknown>, id?: number) {
+export function registerMethods<const T extends Api>(api: T) {
+  function postMessage(
+    topics: Array<string | number>,
+    data: Array<unknown>,
+    id?: number,
+  ) {
     if (data && isTransfer(data[0])) {
-      self.postMessage({ topic, data: data[0][0], id }, '/', data[0][1])
+      self.postMessage({ topics, data: data[0][0], id }, "/", data[0][1]);
     } else {
-      self.postMessage({ topic, data, id })
+      self.postMessage({ topics, data, id });
     }
   }
-  async function onMessage({ data: { topic, data, port, id } }: any) {
+  async function onMessage({
+    data: { topics, data, port, id },
+  }: {
+    data: { topics: Array<string | number>; data: any; port: MessagePort; id: number };
+  }) {
     if (port) {
-      port.onmessage = onMessage
-      return
+      port.onmessage = onMessage;
+      return;
     }
 
     for (let i = 0; i < data.length; i++) {
-      const callback = data[i]
+      const callback = data[i];
       // Deserialize callback
-      if (typeof callback === 'object' && $CALLBACK in callback && callback.auto) {
-        data[i] = (...args: Array<any>) => $apply(callback, ...args)
+      if (
+        typeof callback === "object" &&
+        $CALLBACK in callback &&
+        callback.auto
+      ) {
+        data[i] = (...args: Array<any>) => $apply(callback, ...args);
       }
+    }
+
+    const callback = topics.reduce((acc, topic) => (acc as any)[topic]!, api as Fn | Api);
+
+    if(typeof callback !== 'function'){
+      throw new Error(`Callback is not a function: [${topics.join(', ')}]`)
     }
 
     if (id !== undefined) {
       try {
-        const result = await api[topic]!(...data)
-        postMessage(topic, result, id)
+        const result = await callback(...data);
+        postMessage(topics, result, id);
       } catch (error) {
-        self.postMessage({ id, error })
+        self.postMessage({ id, error });
       }
-      return
+      return;
     }
 
-    api[topic]!(...data)
+    callback(...data);
   }
 
-  self.onmessage = onMessage
+  self.onmessage = onMessage;
 
   // Return the argument for typing purposes
-  return api
+  return api;
 }
 
 /**
@@ -227,25 +264,31 @@ export function registerMethods<T extends Record<string, Fn>>(api: T) {
  * }
  * ```
  */
-export function $transfer<const T extends Array<any>, const U extends Array<Transferable>>(
-  ...args: [...T, U]
+export function $transfer<
+  const T extends Array<any>,
+  const U extends Array<Transferable>,
+>(...args: [...T, U]) {
+  const transferables = args.pop();
+  const result = args as unknown as $Transfer<T, U>;
+  result.$transferables = transferables as U;
+  return result;
+}
+
+export function $callback(
+  callback: ((...args: Array<any>) => void) & { [$CALLBACK]?: number },
 ) {
-  const transferables = args.pop()
-  const result = args as unknown as $Transfer<T, U>
-  result.$transferables = transferables as U
-  return result
-}
-
-export function $callback(callback: ((...args: Array<any>) => void) & { [$CALLBACK]?: number }) {
-  let id = $CALLBACK in callback ? callback[$CALLBACK] : undefined
+  let id = $CALLBACK in callback ? callback[$CALLBACK] : undefined;
   if (!id) {
-    id = ++CALLBACK_ID
-    callback[$CALLBACK] = id
-    CALLBACK_MAP.set(id, callback as $Callback)
+    id = ++CALLBACK_ID;
+    callback[$CALLBACK] = id;
+    CALLBACK_MAP.set(id, callback as $Callback);
   }
-  return { [$CALLBACK]: id } as unknown as $Callback
+  return { [$CALLBACK]: id } as unknown as $Callback;
 }
 
-export function $apply<T extends $Callback>(callback: T, ...args: Parameters<T>) {
-  self.postMessage({ callback: callback[$CALLBACK], args })
+export function $apply<T extends $Callback>(
+  callback: T,
+  ...args: Parameters<T>
+) {
+  self.postMessage({ callback: callback[$CALLBACK], args });
 }
