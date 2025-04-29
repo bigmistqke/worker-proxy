@@ -1,24 +1,38 @@
-// Vanilla worker-proxy
+/**********************************************************************************/
+/*                                                                                */
+/*                                 Vanilla Worker                                 */
+/*                                                                                */
+/**********************************************************************************/
+
 import { $callback, $transfer, createWorkerProxy } from '@bigmistqke/worker-proxy'
 import type VanillaMethods from './worker-vanilla.ts'
 import VanillaWorker from "./worker-vanilla.ts?worker"
 
 const vanillaWorker = createWorkerProxy<typeof VanillaMethods>(new VanillaWorker())
-vanillaWorker.ping(performance.now())
-const buffer1 = new ArrayBuffer()
 
+vanillaWorker.ping(performance.now())
+
+const buffer1 = new ArrayBuffer()
 vanillaWorker.transfer($transfer(buffer1, [buffer1]))
+
 vanillaWorker.logger.log('hello from vanilla worker')
 vanillaWorker.logger.test.$async.hello().then((world) => console.log('vanilla worker async method', world))
 
 vanillaWorker.callback((value) => console.log('callback from vanilla-worker', value))
 vanillaWorker.nestedCallback({cb: $callback((value: string) => console.log('nested callback from vanilla-worker', value))})
 
-// With vite-plugin
+
+/**********************************************************************************/
+/*                                                                                */
+/*                                With Vite Plugin                                */
+/*                                                                                */
+/**********************************************************************************/
+
 import type PluginMethods from './worker-plugin.ts'
 import PluginWorker from "./worker-plugin.ts?worker-proxy"
 
 const pluginWorker = new PluginWorker<typeof PluginMethods>()
+
 pluginWorker.ping(performance.now())
 
 const buffer = new ArrayBuffer()
