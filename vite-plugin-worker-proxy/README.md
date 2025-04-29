@@ -5,8 +5,7 @@ Vite plugin integration of `@bigmistqke/worker-proxy`, automatically wrapping th
 ## Table of Contents
 
 - [Getting Started](#getting-started)
-- [Basic Example](#basics)
-- [$on](#on) _Subscribe to calls_
+- [Basic Example](#basic-example)
 - [$transfer](#transfer) _Transfer `Transferables`_
 - [$async](#async) _Await responses of worker-methods_
 - [$port](#port) _Expose a WorkerProxy's api to another WorkerProxy_
@@ -60,22 +59,69 @@ import Worker from './worker?worker-proxy'
 // Create WorkerProxy
 const worker = new Worker<typeof WorkerApi>()
 
-// Call log-method of worker
-worker.log('hello', 'bigmistqke')
+// Call ping-method of worker
+worker.ping()
+
+// Call log-method of worker.logger
+worker.logger.log('hello', 'bigmistqke')
 ```
 
 **worker.ts**
 
 ```tsx
-import { WorkerProps } from '@bigmistqke/worker-proxy'
-
-// Default export the methods you want to expose.
-export default {
+class Logger {
   log(...args: Array<string>) {
     console.log(...args)
   }
 }
+
+// Default export the methods you want to expose.
+export default {
+  logger: new Logger(),
+  ping() {
+    console.log('ping')
+  }
+}
 ```
+
+<details>
+<summary>Only **paths that lead to methods** are available from the worker-proxy.</summary>
+
+All non-function values (even deeply nested ones) are stripped out from the types.
+
+```ts
+// worker.ts
+export default {
+  state: 'ignore'
+  nested: {
+    state: 'ignore',
+    ignored: {
+      state: 'ignore'
+    },
+    method() {
+      return 'not ignored'
+    }
+  }
+}
+
+// main.ts
+import type Logger from './worker.ts'
+import Worker from './worker.ts?worker-proxy'
+
+const workerProxy = new Worker<Logger>()
+```
+
+The resulting type of `workerProxy` will be:
+
+```ts
+{
+  nested: {
+    method(): string
+  }
+}
+```
+
+</details>
 
 ## $async
 

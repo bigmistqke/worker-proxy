@@ -30,7 +30,7 @@ packages:
   '@bigmistqke/vite-plugin-worker-proxy@file:../vite-plugin-worker-proxy':
     resolution: {directory: ../vite-plugin-worker-proxy, type: directory}
     peerDependencies:
-      '@bigmistqke/worker-proxy': ^0.0.3
+      '@bigmistqke/worker-proxy': ^0.0.13
       vite: ^5.4.2
 
   '@bigmistqke/worker-proxy@file:../worker-proxy':

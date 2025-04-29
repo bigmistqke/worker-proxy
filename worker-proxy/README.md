@@ -5,7 +5,7 @@ Library to improve worker DX, similar to [ComLink](https://github.com/GoogleChro
 ## Table of Contents
 
 - [Getting Started](#getting-started)
-- [Basic Example](#basics)
+- [Basic Example](#basic-example)
 - [$transfer](#transfer) _Transfer `Transferables`_
 - [$async](#async) _Await responses of worker-methods_
 - [$port](#port) _Expose a WorkerProxy's api to another WorkerProxy_
@@ -39,13 +39,16 @@ yarn add --dev @bigmistqke/worker-proxy
 **main.ts**
 
 ```tsx
-import type { Methods } from './worker.ts'
+import type Methods from './worker.ts'
 
 // Create WorkerProxy
 const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
 
-// Call log-method of worker
-worker.log('hello', 'bigmistqke')
+// Call ping-method of worker
+worker.ping()
+
+// Call log-method of worker.logger
+worker.logger.log('hello', 'bigmistqke')
 ```
 
 **worker.ts**
@@ -53,18 +56,60 @@ worker.log('hello', 'bigmistqke')
 ```tsx
 import { type WorkerProps, registerMethods } from '@bigmistqke/worker-proxy'
 
-const methods = {
+class Logger {
   log(...args: Array<string>) {
     console.log(...args)
-  },
+  }
 }
 
-// Initialize worker-methods
-registerMethods(methods)
-
-// Export types of methods to infer the WorkerProxy's type
-export type Methods = typeof methods
+// Initialize worker-methods with registerMethods
+// Default export types of methods to infer the WorkerProxy's type
+export default registerMethods({
+  logger: new Logger(),
+  ping() {
+    console.log('ping')
+  },
+})
 ```
+
+<details>
+<summary>Only **paths that lead to methods** are available from the worker-proxy.</summary>
+
+All non-function values (even deeply nested ones) are stripped out from the types.
+
+```ts
+// worker.ts
+export default registerMethods({
+  state: 'ignore'
+  nested: {
+    state: 'ignore',
+    ignored: {
+      state: 'ignore'
+    },
+    method() {
+      return 'not ignored'
+    }
+  }
+})
+
+// main.ts
+import type Methods from './worker.ts'
+import Worker from './worker.ts?worker'
+
+const workerProxy = createWorkerProxy<Methods>(new Worker())
+```
+
+The resulting type of `workerProxy` will be:
+
+```ts
+{
+  nested: {
+    method(): string
+  }
+}
+```
+
+</details>
 
 ## $async
 
