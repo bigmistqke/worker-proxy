@@ -73,7 +73,7 @@ export default registerMethods({
 ```
 
 <details>
-<summary>Only **paths that lead to methods** are available from the worker-proxy.</summary>
+<summary>Only <b>paths that lead to methods</b> are available from the worker-proxy.</summary>
 
 All non-function values (even deeply nested ones) are stripped out from the types.
 
