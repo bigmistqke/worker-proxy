@@ -1,5 +1,4 @@
-import { $PORT, $TRANSFER } from 'src'
-import { $CALLBACK } from './constants'
+import { $CALLBACK, $TRANSFER, $WORKER } from './constants'
 
 export type $Transfer<T = Array<any>, U = Array<Transferable>> = T & {
   [$TRANSFER]: U
@@ -43,7 +42,7 @@ export type WorkerProxyNode<T> = T extends Fn
       }
   : never
 
-export type WorkerProxy<T extends object> = WorkerProxyNode<T>
+export type WorkerProxy<T extends object> = WorkerProxyNode<T> & { [$WORKER]: Worker }
 
 /** Branded `MessagePort` */
-export type WorkerProxyPort<T extends object> = MessagePort & { [$PORT]: WorkerProxy<T> }
+export type WorkerProxyPort<T extends object> = MessagePort & { [$WORKER]: WorkerProxy<T> }

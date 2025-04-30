@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@bigmistqke/worker-proxy':
-        specifier: ^0.0.1
-        version: 0.0.1
+        specifier: ^0.0.13
+        version: 0.0.13
       tsup:
         specifier: ^8.3.5
         version: 8.3.5(postcss@8.4.49)(typescript@5.7.2)
@@ -27,8 +27,8 @@ importers:
 
 packages:
 
-  '@bigmistqke/worker-proxy@0.0.1':
-    resolution: {integrity: sha512-b8zwIHwnTcrZ3nJ8KIZ7ubJCYJSulnjKEPRlGNuWVD5AFm/KyhcKzePM1b5gGPfer/NFBdkc6DUNmXpY3wrn1Q==}
+  '@bigmistqke/worker-proxy@0.0.13':
+    resolution: {integrity: sha512-lq75Zb1LMvo/K6e7hSszc+mCZ2IyDnmdLzxsxVC8+v9Ve2sp7SEL4Eper9moBHKyEdWVnpfQSX+tVD5GkuzVBg==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -805,7 +805,7 @@ packages:
 
 snapshots:
 
-  '@bigmistqke/worker-proxy@0.0.1': {}
+  '@bigmistqke/worker-proxy@0.0.13': {}
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true

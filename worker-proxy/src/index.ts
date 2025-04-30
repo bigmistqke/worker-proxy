@@ -1,9 +1,6 @@
 export * from './types.js';
-import { $CALLBACK } from './constants.js';
+import { $CALLBACK, $TRANSFER, $WORKER } from './constants.js';
 import type { $Callback, $Transfer, Fn, WorkerProxy, WorkerProxyPort } from './types.js';
-
-export const $PORT = Symbol('port')
-export const $TRANSFER = Symbol('transfer')
 
 let CALLBACK_ID = 0;
 const CALLBACK_MAP = new Map<number, $Callback>();
@@ -51,9 +48,9 @@ function isTransfer(value: any): value is $Transfer {
  * const otherProxy = createWorkerProxy(port)
  * ```
  */
-export function createWorkerProxy<const T extends {[$PORT]: WorkerProxy<any>}>(
+export function createWorkerProxy<const T extends {[$TRANSFER]: WorkerProxy<any>}>(
   input: T,
-): T[typeof $PORT];
+): T[typeof $TRANSFER];
 export function createWorkerProxy<const T extends object>(input: string | Worker): WorkerProxy<T>;
 export function createWorkerProxy(
   input: WorkerProxyPort<any> | Worker | string,
@@ -111,12 +108,8 @@ export function createWorkerProxy(
     return createProxy<T>(
       (topic) => {
         switch (topic) {
-          case $PORT:
-            return () => {
-              const { port1, port2 } = new MessageChannel();
-              worker.postMessage({ port: port1 }, [port1]);
-              return port2;
-            };
+          case $WORKER:
+            return worker
           case "$":
             return (...data: Array<unknown>) => {
               id++;
@@ -124,7 +117,7 @@ export function createWorkerProxy(
               return new Promise((resolve, reject) => {
                 pendingMessages[id] = { resolve, reject };
               });
-            };;
+            };
           default:
             return createNestedProxy([...topics, topic]);
         }
@@ -296,5 +289,8 @@ export function $apply<T extends $Callback>(
 
 
 export function $port<T extends WorkerProxy<any>>(value: T){
-  return (value as any)[$PORT]?.() as WorkerProxyPort<T>
+  const worker = value[$WORKER]
+  const { port1, port2 } = new MessageChannel();
+  worker.postMessage({ port: port1 }, [port1]);
+  return port2;
 }
