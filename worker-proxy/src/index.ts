@@ -1,6 +1,9 @@
 export * from './types.js';
 import { $CALLBACK } from './constants.js';
-import type { $Callback, $Transfer, Api, Fn, WorkerProxy, WorkerProxyPort } from './types.js';
+import type { $Callback, $Transfer, Fn, WorkerProxy, WorkerProxyPort } from './types.js';
+
+export const $PORT = Symbol('port')
+export const $TRANSFER = Symbol('transfer')
 
 let CALLBACK_ID = 0;
 const CALLBACK_MAP = new Map<number, $Callback>();
@@ -20,7 +23,7 @@ function createProxy<T extends object = object>(
 }
 
 function isTransfer(value: any): value is $Transfer {
-  return Array.isArray(value) && "$transferable" in value;
+  return Array.isArray(value) && $TRANSFER in value;
 }
 
 /**
@@ -48,13 +51,13 @@ function isTransfer(value: any): value is $Transfer {
  * const otherProxy = createWorkerProxy(port)
  * ```
  */
-export function createWorkerProxy<const T extends WorkerProxyPort<any>>(
+export function createWorkerProxy<const T extends {[$PORT]: WorkerProxy<any>}>(
   input: T,
-): WorkerProxy<T["$"]>;
-export function createWorkerProxy<const T>(input: string | Worker): WorkerProxy<T>;
+): T[typeof $PORT];
+export function createWorkerProxy<const T extends object>(input: string | Worker): WorkerProxy<T>;
 export function createWorkerProxy(
   input: WorkerProxyPort<any> | Worker | string,
-) {
+): WorkerProxy<any> {
   const worker = typeof input === "string" ? new Worker(input) : input;
 
   let id = 0;
@@ -76,7 +79,7 @@ export function createWorkerProxy(
           data: data[0],
           id,
         },
-        data[0].$transferables,
+        data[0][$TRANSFER],
       );
     } else {
       worker.postMessage({
@@ -104,29 +107,26 @@ export function createWorkerProxy(
     eventTarget.dispatchEvent(new CustomEvent(topic, { detail: data }));
   };
 
-  function step<T extends object>(topics: (string | number | symbol)[]){
-    const asyncProxy = createProxy((topic) => {
-      return (...data: Array<unknown>) => {
-        id++;
-        postMessage([...topics, topic], data, id);
-        return new Promise((resolve, reject) => {
-          pendingMessages[id] = { resolve, reject };
-        });
-      };
-    });
+  function createNestedProxy<T extends object>(topics: (string | number | symbol)[]){
     return createProxy<T>(
       (topic) => {
         switch (topic) {
-          case "$port":
+          case $PORT:
             return () => {
               const { port1, port2 } = new MessageChannel();
               worker.postMessage({ port: port1 }, [port1]);
               return port2;
             };
-          case "$async":
-            return asyncProxy;
+          case "$":
+            return (...data: Array<unknown>) => {
+              id++;
+              postMessage(topics, data, id);
+              return new Promise((resolve, reject) => {
+                pendingMessages[id] = { resolve, reject };
+              });
+            };;
           default:
-            return step([...topics, topic]);
+            return createNestedProxy([...topics, topic]);
         }
       },
       (...args) => {
@@ -146,7 +146,8 @@ export function createWorkerProxy(
       },
     );
   }
-  return step([]);
+
+  return createNestedProxy([]) as unknown as WorkerProxy<any>;
 }
 
 /**
@@ -172,7 +173,7 @@ export function createWorkerProxy(
  * workerProxy.hallo()
  * ```
  */
-export function registerMethods<const T extends Api>(api: T) {
+export function registerMethods<const T extends object>(api: T) {
   function postMessage(
     topics: Array<string | number>,
     data: Array<unknown>,
@@ -206,7 +207,7 @@ export function registerMethods<const T extends Api>(api: T) {
       }
     }
 
-    const callback = topics.reduce((acc, topic) => (acc as any)[topic]!, api as Fn | Api);
+    const callback = topics.reduce((acc, topic) => (acc as any)[topic]!, api as Fn | object);
 
     if(typeof callback !== 'function'){
       throw new Error(`Callback is not a function: [${topics.join(', ')}]`)
@@ -270,7 +271,7 @@ export function $transfer<
 >(...args: [...T, U]) {
   const transferables = args.pop();
   const result = args as unknown as $Transfer<T, U>;
-  result.$transferables = transferables as U;
+  result[$TRANSFER] = transferables as U;
   return result;
 }
 
@@ -291,4 +292,9 @@ export function $apply<T extends $Callback>(
   ...args: Parameters<T>
 ) {
   self.postMessage({ callback: callback[$CALLBACK], args });
+}
+
+
+export function $port<T extends WorkerProxy<any>>(value: T){
+  return (value as any)[$PORT]?.() as WorkerProxyPort<T>
 }

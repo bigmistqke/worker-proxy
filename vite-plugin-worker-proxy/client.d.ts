@@ -1,12 +1,9 @@
 declare module '*?worker-proxy' {
-  type WorkerProxyPort<T> = MessagePort & { $: T }
-  type $Transfer<T = Array<any>, U = Array<Transferable>> = T & {
-    $transferables: U
-  }
-
   type Fn = (...arg: Array<any>) => any
 
-  type SyncMethod<T extends Fn> = (...args: Parameters<T> | [$Transfer<Parameters<T>>]) => void
+  type SyncMethod<T extends Fn> = (
+    ...args: Parameters<T> | [WorkerProxySymbols.$Transfer<Parameters<T>>]
+  ) => void
   export type SyncMethods<T extends Record<string, Fn>> = {
     [TKey in keyof T as T[TKey] extends Fn ? TKey : never]: SyncMethod<T[TKey]>
   }

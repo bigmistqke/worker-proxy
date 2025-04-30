@@ -4,7 +4,7 @@
 /*                                                                                */
 /**********************************************************************************/
 
-import { $callback, $transfer, createWorkerProxy } from '../../worker-proxy/src'
+import { $callback, $port, $transfer, createWorkerProxy } from '@bigmistqke/worker-proxy'
 import type VanillaMethods from './worker-vanilla.ts'
 import VanillaWorker from "./worker-vanilla.ts?worker"
 
@@ -21,6 +21,9 @@ vanillaWorker.logger.test.hello.$().then((world) => console.log('vanilla worker 
 vanillaWorker.callback((value) => console.log('callback from vanilla-worker', value))
 vanillaWorker.nestedCallback({cb: $callback((value: string) => console.log('nested callback from vanilla-worker', value))})
 
+const port = $port(vanillaWorker)
+
+console.log('port', port)
 
 /**********************************************************************************/
 /*                                                                                */
@@ -39,11 +42,11 @@ const buffer = new ArrayBuffer()
 pluginWorker.transfer($transfer(buffer, [buffer]))
 
 pluginWorker.logger.log('hello from plugin worker')
-pluginWorker.logger.test.hello.$().then((world) => console.log('plugin worker async method', world))
-
+// pluginWorker.logger.test.hello.$().then((world) => console.log('plugin worker async method', world))
 pluginWorker.callback((value) => console.log('callback from plugin-worker', value))
 pluginWorker.nestedCallback({cb: $callback((value: string) => console.log('nested callback from plugin-worker', value))})
 
+pluginWorker.receivePort($transfer(port, [port]))
 
 
 

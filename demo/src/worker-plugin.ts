@@ -1,4 +1,5 @@
-import { $apply, $Callback } from "@bigmistqke/worker-proxy"
+import { $apply, $Callback, createWorkerProxy, WorkerProxyPort } from "@bigmistqke/worker-proxy"
+import type VanillaMethods from "./worker-vanilla"
 
 class Logger {
   state = "ignore"
@@ -29,5 +30,9 @@ export default {
   },
   transfer(buffer: ArrayBuffer){
     console.log('transferred to worker-plugin', buffer)
+  },
+  receivePort(port: WorkerProxyPort<typeof VanillaMethods>){
+    const proxy = createWorkerProxy(port)
+    proxy.logger.log('hello from worker-plugin to vanilla-worker')
   }
 }
