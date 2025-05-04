@@ -104,6 +104,21 @@ export function createWorkerProxy(
     eventTarget.dispatchEvent(new CustomEvent(topic, { detail: data }));
   };
 
+  function serializeCallbacks(args: Array<any>){
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (typeof arg === "function") {
+        const result = $callback(arg);
+        args[i] = {
+          [$CALLBACK]: result[$CALLBACK],
+          // Add flag that it should automatically deserialize this callback
+          auto: true,
+        };
+      }
+    }
+    return args
+  }
+
   function createNestedProxy<T extends object>(topics: (string | number | symbol)[]){
     return createProxy<T>(
       (topic) => {
@@ -111,9 +126,9 @@ export function createWorkerProxy(
           case $WORKER:
             return worker
           case "$":
-            return (...data: Array<unknown>) => {
+            return (...args: Array<unknown>) => {
               id++;
-              postMessage(topics, data, id);
+              postMessage(topics, serializeCallbacks(args), id);
               return new Promise((resolve, reject) => {
                 pendingMessages[id] = { resolve, reject };
               });
@@ -123,19 +138,7 @@ export function createWorkerProxy(
         }
       },
       (...args) => {
-        for (let i = 0; i < args.length; i++) {
-          const arg = args[i];
-          // Serialize callbacks
-          if (typeof arg === "function") {
-            const result = $callback(arg);
-            args[i] = {
-              [$CALLBACK]: result[$CALLBACK],
-              // Add flag that it should automatically deserialize this callback
-              auto: true,
-            };
-          }
-        }
-        return postMessage(topics, args);
+        return postMessage(topics, serializeCallbacks(args));
       },
     );
   }
