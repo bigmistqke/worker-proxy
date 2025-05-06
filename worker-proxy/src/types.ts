@@ -9,8 +9,7 @@ export type $Callback<T = Fn> = T & { [$CALLBACK]: number }
 export type Fn = (...arg: Array<any>) => any
 
 interface WorkerMethod<T extends Fn> {
-  (...args: Parameters<T> | [$Transfer<Parameters<T>>]): void
-  $: (...args: Parameters<T> | [$Transfer<Parameters<T>>]) => Promise<ReturnType<T>>
+  (...args: Parameters<T> | [$Transfer<Parameters<T>>]): Promise<ReturnType<T>>
 }
 
 type FilterWorkerProxyNode<T> = {

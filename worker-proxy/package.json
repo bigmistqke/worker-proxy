@@ -13,6 +13,7 @@
     }
   },
   "scripts": {
+    "dev": "vite",
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "test": "vitest run",
     "prepublishOnly": "pnpm run build"
@@ -21,7 +22,12 @@
   "devDependencies": {
     "prettier": "2.8.4",
     "tsup": "6.6.3",
-    "vitest": "0.28.5",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vite": "^6.3.5",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "0.28.5"
+  },
+  "dependencies": {
+    "valibot": "^1.0.0"
   }
 }
