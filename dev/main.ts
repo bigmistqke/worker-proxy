@@ -91,8 +91,12 @@ function element<K extends keyof HTMLElementTagNameMap>({
 // shakeButton.onclick = () => handshake('shake')
 // shakeButton.textContent = 'shake'
 
-const playground = element({ tagName: 'iframe', src: 'hallo', parentElement: document.body })
-playground.src = 'hallo'
+const playground = element({
+  tagName: 'iframe',
+  src: '/hallo/index.html',
+  parentElement: document.body,
+})
+playground.src = 'hallo/index.html'
 
 let getJavascript: (() => Promise<string>) | undefined = undefined
 
@@ -131,7 +135,7 @@ navigator.serviceWorker
       proxy.cursor(id, event.clientX, event.clientY)
     })
 
-    proxy.setWorld('<script src="./rpc-javascript-test.js"></script>ok')
+    proxy.setWorld('<script type="module" src="./rpc-javascript-test.js"></script>ok')
 
     const javascript = await proxy.getJavascript()
     textarea = element({

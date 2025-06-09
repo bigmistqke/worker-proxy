@@ -43,64 +43,66 @@ interface Link {
   link(stream: ReadableStream): void
 }
 
-const links: {
-  hand: Link | undefined
-  shake: Link | undefined
-} = {
-  hand: undefined,
-  shake: undefined,
-}
-
 const refreshes = new Set<() => void>()
 
-sw.addEventListener('fetch', async (event: FetchEvent) => {
-  const pathname = new URL(event.request.url).pathname
-  console.log('pathname', pathname)
+function createRouter(
+  routes: Record<string, (event: FetchEvent) => Response>,
+  { base = '' }: { base?: string } = {},
+) {
+  return function (event: FetchEvent) {
+    const pathname = new URL(event.request.url).pathname
+    const route = routes[`${base}${pathname}`]
+    if (route) {
+      event.respondWith(route(event))
+      return true
+    }
+    return false
+  }
+}
 
-  if (pathname.includes('rpc-refresh')) {
-    console.log('RPC REFRESH!')
-    const { proxy, response, onClose } = server(event.request.body!, methods)
+const router = createRouter({
+  '/hallo/rpc-refresh'(event) {
+    const { proxy, response, onClose } = server<{ reload(): void }>(event.request.body!, methods)
     refreshes.add(proxy.reload)
-    onClose(() => refreshes.delete(proxy))
-
-    /* setTimeout(() => {
-      proxy.reload()
-    }, 2_000) */
-
-    event.respondWith(response)
-  } else if (pathname.includes('rpc-proxy-lib.js')) {
-    event.respondWith(
-      new Response(raw, { headers: { 'Content-Type': 'text/javascript; charset=utf-8' } }),
-    )
-  } else if (isStreamRequest(event)) {
-    const { response } = server(event.request.body!, methods)
-    event.respondWith(response)
-  } else if (pathname.includes('rpc-javascript-test.js')) {
-    event.respondWith(
-      new Response(
-        `import("./rpc-proxy-lib.js").then(({ client }) => {
-  client("rpc-refresh", {
-    reload() {
-      window.location.reload()
-    },
-  })
+    onClose(() => refreshes.delete(proxy.reload))
+    return response
+  },
+  '/hallo/rpc-proxy-lib.js'() {
+    return new Response(raw, { headers: { 'Content-Type': 'text/javascript; charset=utf-8' } })
+  },
+  '/hallo/rpc-javascript-test.js'() {
+    return new Response(
+      `import("./rpc-proxy-lib.js").then(({ client }) => {
+client("rpc-refresh", {
+  reload() {
+    window.location.reload()
+  },
+})
 })
 ${javascript}`,
-        {
-          headers: {
-            'Content-Type': 'text/javascript; charset=utf-8',
-          },
-        },
-      ),
-    )
-  } else if (pathname.includes('hallo')) {
-    event.respondWith(
-      new Response(world, {
+      {
         headers: {
-          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Type': 'text/javascript; charset=utf-8',
         },
-      }),
+      },
     )
+  },
+  '/hallo/index.html'() {
+    return new Response(world, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+      },
+    })
+  },
+})
+
+sw.addEventListener('fetch', async (event: FetchEvent) => {
+  if (router(event)) {
+    return
+  }
+  if (isStreamRequest(event)) {
+    const { response } = server(event.request.body!, methods)
+    event.respondWith(response)
   }
 })
 
