@@ -1,4 +1,4 @@
-import { expose, rpc } from 'src'
+import { expose, rpc } from 'src/messenger'
 import type { MainMethods } from './main'
 
 const methods = {

@@ -1,4 +1,4 @@
-import { expose } from 'src'
+import { expose } from 'src/messenger'
 
 const methods = {
   ping(timestamp: number) {
@@ -8,7 +8,7 @@ const methods = {
 }
 
 const channel = new MessageChannel()
-expose(methods, channel.port2)
+expose(methods, { to: channel.port2 })
 
 self.postMessage(channel.port1, [channel.port1])
 

@@ -1,4 +1,4 @@
-import { expose } from 'src'
+import { expose } from 'src/messenger'
 
 const methods = {
   ping(timestamp: number) {

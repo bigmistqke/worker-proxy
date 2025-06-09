@@ -1,3 +1,5 @@
+import { BaseSchema, InferOutput, safeParse } from 'valibot'
+
 export function createIdAllocator() {
   const freeIds = new Array<number>()
   let id = 0
@@ -15,7 +17,12 @@ export function createIdAllocator() {
   }
 }
 
-export function createIdRegistry<T>() {
+export interface IdRegistry<T> {
+  register(value: T): number
+  free(id: number): T | undefined
+}
+
+export function createIdRegistry<T>(): IdRegistry<T> {
   const map = new Map<number, T>()
   const idFactory = createIdAllocator()
 
@@ -30,6 +37,15 @@ export function createIdRegistry<T>() {
       return map.get(id)
     },
   }
+}
+
+export type PromiseRegistry = IdRegistry<{
+  resolve(value: any): void
+  reject(value: unknown): void
+}>
+
+export function createPromiseRegistry(): PromiseRegistry {
+  return createIdRegistry()
 }
 
 export function defer<T = void>() {
@@ -60,4 +76,32 @@ export function createCommander<T extends object = object>(
     })
   }
   return _createCommander([], apply)
+}
+
+/**
+ * Creates a schema-backed shape definition with a validator and constructor.
+ *
+ * @param schema - A Valibot schema for the shape
+ * @param create - A function that produces valid output for the schema
+ */
+export function createShape<
+  TSchema extends BaseSchema<any, any, any>,
+  TCreate extends (...args: Array<any>) => InferOutput<TSchema>,
+>(schema: TSchema, create: TCreate) {
+  return {
+    validate: (value: any): value is InferOutput<TSchema> => safeParse(schema, value).success,
+    create,
+  }
+}
+
+// expose-core.ts
+export function callMethod(methods: object, topics: string[], args: unknown[]) {
+  const method = topics.reduce((acc, topic) => {
+    const result = (acc as any)?.[topic]
+    return result
+  }, methods)
+  if (typeof method !== 'function') {
+    throw new Error(`Topics did not resolve to a function: [${topics.join(',')}]`)
+  }
+  return method(...args)
 }

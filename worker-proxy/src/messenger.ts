@@ -1,17 +1,16 @@
 import {
-  any,
-  array,
-  BaseSchema,
-  boolean,
-  InferOutput,
-  number,
-  object,
-  safeParse,
-  string,
-  unknown,
-} from 'valibot'
-import { WorkerProxy } from './types'
-import { createCommander, createIdRegistry, defer } from './utils'
+  $MESSENGER_ERROR,
+  $MESSENGER_RESPONSE,
+  ErrorShape,
+  RequestData,
+  RequestShape,
+  ResponseShape,
+  RPCPayloadShape,
+} from './message-protocol'
+import { RPC } from './types'
+import { callMethod, createCommander, createIdRegistry, defer } from './utils'
+
+export const $TRANSFER = 'WORKER-TRANSFER'
 
 interface WorkerMessenger {
   postMessage(message: any, transferables?: any[]): void
@@ -50,100 +49,6 @@ function usePostMessage(messenger: Messenger) {
   }
 }
 
-/**
- * Creates a schema-backed shape definition with a validator and constructor.
- *
- * @param schema - A Valibot schema for the shape
- * @param create - A function that produces valid output for the schema
- */
-function createShape<
-  TSchema extends BaseSchema<any, any, any>,
-  TCreate extends (...args: Array<any>) => InferOutput<TSchema>,
->(schema: TSchema, create: TCreate) {
-  return {
-    validate: (value: any): value is InferOutput<TSchema> => safeParse(schema, value).success,
-    create,
-  }
-}
-
-/**
- * Creates a message protocol that can validate incoming events and construct outgoing messages.
- *
- * @param schema - A Valibot schema describing the expected message data
- * @param createMessage - A function to construct valid message payloads
- */
-function createMessageProtocol<
-  TSchema extends BaseSchema<any, any, any>,
-  TCreate extends (...args: Array<any>) => InferOutput<TSchema>,
->(schema: TSchema, createMessage: TCreate) {
-  return {
-    validateEvent: (value: Event): value is MessageEvent<InferOutput<TSchema>> =>
-      safeParse(object({ data: schema }), value).success,
-    createMessage,
-  }
-}
-
-/**********************************************************************************/
-/*                                                                                */
-/*                                    Protocol                                    */
-/*                                                                                */
-/**********************************************************************************/
-
-// Schema and protocol for requests
-const $REQUEST = 'RPC_PROXY_REQUEST'
-
-const requestSchema = object({
-  [$REQUEST]: number(),
-  payload: unknown(),
-})
-
-const RequestProtocol = createMessageProtocol(requestSchema, <T>(id: number, payload: T) => ({
-  [$REQUEST]: id,
-  payload,
-}))
-
-type RequestEvent = MessageEvent<InferOutput<typeof requestSchema>>
-
-// Schema and protocol for responses
-const $RESPONSE = 'RPC_PROXY_RESPONSE'
-
-const ResponseProtocol = createMessageProtocol(
-  object({
-    [$RESPONSE]: number(),
-    payload: unknown(),
-  }),
-  (event: RequestEvent, payload: any) => ({
-    [$RESPONSE]: event.data[$REQUEST],
-    payload,
-  }),
-)
-
-// Schema and protocol of errors
-const $ERROR = 'RPC_PROXY_ERROR'
-
-const ErrorProtocol = createMessageProtocol(
-  object({
-    [$ERROR]: number(),
-    error: unknown(),
-  }),
-  (event: RequestEvent, error: any) => ({
-    [$ERROR]: event.data[$REQUEST],
-    error,
-  }),
-)
-
-// RPC-specific request payload
-const $RPC_REQUEST = 'RPC_PROXY_RPC_REQUEST'
-
-const RPCRequestPayload = createShape(
-  object({
-    [$RPC_REQUEST]: boolean(),
-    topics: array(string()),
-    args: array(any()),
-  }),
-  (topics: Array<string>, args: Array<any>) => ({ [$RPC_REQUEST]: true, topics, args }),
-)
-
 /**********************************************************************************/
 /*                                                                                */
 /*                              Requester / Responder                             */
@@ -167,10 +72,11 @@ function createRequester(messenger: Messenger, options: { signal?: AbortSignal }
   messenger.addEventListener(
     'message',
     event => {
-      if (ErrorProtocol.validateEvent(event)) {
-        promiseRegistry.free(event.data[$ERROR])?.reject(event.data.error)
-      } else if (ResponseProtocol.validateEvent(event)) {
-        promiseRegistry.free(event.data[$RESPONSE])?.resolve(event.data.payload)
+      const data = (event as MessageEvent<unknown>).data
+      if (ErrorShape.validate(data)) {
+        promiseRegistry.free(data[$MESSENGER_ERROR])?.reject(data.error)
+      } else if (ResponseShape.validate(data)) {
+        promiseRegistry.free(data[$MESSENGER_RESPONSE])?.resolve(data.payload)
       }
     },
     options,
@@ -183,7 +89,7 @@ function createRequester(messenger: Messenger, options: { signal?: AbortSignal }
   return (payload: any, transferables?: any[]) => {
     const { promise, resolve, reject } = defer()
     const id = promiseRegistry.register({ resolve, reject })
-    postMessage(RequestProtocol.createMessage(id, payload), transferables)
+    postMessage(RequestShape.create(id, payload), transferables)
     return promise
   }
 }
@@ -195,9 +101,9 @@ function createRequester(messenger: Messenger, options: { signal?: AbortSignal }
  * @param callback - A function called with the validated request event
  * @param options - Optional abort signal
  */
-function createResponder(
+export function createResponder(
   messenger: Messenger,
-  callback: (event: RequestEvent) => any,
+  callback: (data: RequestData) => any,
   options: { signal?: AbortSignal } = {},
 ) {
   const postMessage = usePostMessage(messenger)
@@ -205,11 +111,12 @@ function createResponder(
   messenger.addEventListener(
     'message',
     event => {
-      if (RequestProtocol.validateEvent(event)) {
+      const data = (event as MessageEvent).data
+      if (RequestShape.validate(data)) {
         try {
-          postMessage(ResponseProtocol.createMessage(event, callback(event)))
+          postMessage(ResponseShape.create(data, callback(data)))
         } catch (error) {
-          postMessage(ErrorProtocol.createMessage(event, error))
+          postMessage(ErrorShape.create(data, error))
         }
       }
     },
@@ -239,19 +146,13 @@ export function expose<T extends object>(
 ) {
   createResponder(
     to,
-    event => {
-      if (RequestProtocol.validateEvent(event) && RPCRequestPayload.validate(event.data.payload)) {
+    data => {
+      if (RPCPayloadShape.validate(data.payload)) {
         try {
-          const method = event.data.payload.topics.reduce(
-            (acc, topic) => (acc as any)[topic]!,
-            methods as ((...args: Array<any>) => any) | object,
-          )
-          if (typeof method !== 'function') {
-            throw `Topics is not a method`
-          }
-          return method(...event.data.payload.args)
+          const { topics, args } = data.payload
+          return callMethod(methods, topics, args)
         } catch (error) {
-          console.error('Error while processing rpc request:', error, event.data.payload, methods)
+          console.error('Error while processing rpc request:', error, data.payload, methods)
         }
       }
     },
@@ -269,9 +170,7 @@ export function expose<T extends object>(
 export function rpc<T extends object>(
   messenger: Messenger,
   options?: { signal?: AbortSignal },
-): WorkerProxy<T> {
+): RPC<T> {
   const request = createRequester(messenger, options)
-  return createCommander<WorkerProxy<T>>((topics, args) =>
-    request(RPCRequestPayload.create(topics, args)),
-  )
+  return createCommander<RPC<T>>((topics, args) => request(RPCPayloadShape.create(topics, args)))
 }

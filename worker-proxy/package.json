@@ -6,15 +6,26 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "require": "./dist/index.cjs",
-      "import": "./dist/index.js"
+    "./messenger": {
+      "import": "./dist/messenger.js",
+      "types": "./dist/messenger.d.ts"
+    },
+    "./stream": {
+      "import": "./dist/stream/index.js",
+      "types": "./dist/stream/index.d.ts"
+    },
+    "./fetch": {
+      "import": "./dist/fetch/index.js",
+      "types": "./dist/fetch/index.d.ts"
+    },
+    "./fetch/node": {
+      "import": "./dist/fetch/node.js",
+      "types": "./dist/fetch/node.d.ts"
     }
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "build": "tsup",
     "test": "vitest run",
     "prepublishOnly": "pnpm run build"
   },
@@ -24,10 +35,12 @@
     "tsup": "6.6.3",
     "typescript": "^5.7.2",
     "vite": "^6.3.5",
+    "vite-plugin-mkcert": "^1.17.8",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "0.28.5"
   },
   "dependencies": {
+    "@types/node": "^22.15.30",
     "valibot": "^1.0.0"
   }
 }

@@ -1,20 +1,5 @@
-import { $CALLBACK, $TRANSFER, $WORKER } from './constants'
-
-export type $Transfer<T = Array<any>, U = Array<Transferable>> = T & {
-  [$TRANSFER]: U
-}
-
-export type $Callback<T = Fn> = T & { [$CALLBACK]: number }
-
 export type Fn = (...arg: Array<any>) => any
-
-interface WorkerMethod<T extends Fn> {
-  (...args: Parameters<T> | [$Transfer<Parameters<T>>]): Promise<ReturnType<T>>
-}
-
-type FilterWorkerProxyNode<T> = {
-  [TKey in keyof T as WorkerProxyNode<T[TKey]> extends never ? never : TKey]: T[TKey]
-}
+export type MaybePromise<T> = T | Promise<T>
 
 // To prevent error: `Type instantiation is excessively deep and possibly infinite.`
 type isObject<T> = T extends object ? true : false
@@ -27,21 +12,93 @@ type HasMethod<T> = T extends object
     : true
   : false
 
-export type WorkerProxyNode<T> = T extends Fn
-  ? WorkerMethod<T>
+/**********************************************************************************/
+/*                                                                                */
+/*                                       Sync                                     */
+/*                                                                                */
+/**********************************************************************************/
+
+export interface NoResponseMethod<T extends Fn> {
+  (...args: Parameters<T>): void
+}
+
+export type NoResponseRPCNode<T> = T extends Fn
+  ? NoResponseMethod<T>
   : T extends readonly [any, ...any[]] // is it a tuple?
-  ? { [K in keyof T]: WorkerProxyNode<T[K]> } // preserve tuple structure
+  ? { [K in keyof T]: NoResponseRPCNode<T[K]> } // preserve tuple structure
   : // To prevent error: `Type instantiation is excessively deep and possibly infinite.`
   isObject<T> extends true
   ? // Filter branches that lead to no method
     HasMethod<T> extends false
     ? never
     : {
-        [TKey in keyof FilterWorkerProxyNode<T>]: WorkerProxyNode<T[TKey]>
+        [TKey in keyof FilterNoResponseMethod<T>]: NoResponseRPCNode<T[TKey]>
       }
   : never
 
-export type WorkerProxy<T extends object> = WorkerProxyNode<T> & { [$WORKER]: Worker }
+type FilterNoResponseMethod<T> = {
+  [TKey in keyof T as NoResponseRPCNode<T[TKey]> extends never ? never : TKey]: T[TKey]
+}
 
-/** Branded `MessagePort` */
-export type WorkerProxyPort<T extends object> = MessagePort & { [$WORKER]: WorkerProxy<T> }
+/**********************************************************************************/
+/*                                                                                */
+/*                                      Async                                     */
+/*                                                                                */
+/**********************************************************************************/
+
+export interface ResponseMethod<T extends Fn> {
+  (...args: Parameters<T>): Promise<ReturnType<T>>
+}
+
+export type ResponseRPCNode<T> = T extends Fn
+  ? ResponseMethod<T>
+  : T extends readonly [any, ...any[]] // is it a tuple?
+  ? { [K in keyof T]: ResponseRPCNode<T[K]> } // preserve tuple structure
+  : // To prevent error: `Type instantiation is excessively deep and possibly infinite.`
+  isObject<T> extends true
+  ? // Filter branches that lead to no method
+    HasMethod<T> extends false
+    ? never
+    : {
+        [TKey in keyof FilterResponseMethod<T>]: ResponseRPCNode<T[TKey]>
+      }
+  : never
+
+type FilterResponseMethod<T> = {
+  [TKey in keyof T as ResponseRPCNode<T[TKey]> extends never ? never : TKey]: T[TKey]
+}
+
+/**********************************************************************************/
+/*                                                                                */
+/*                                       RPC                                      */
+/*                                                                                */
+/**********************************************************************************/
+
+export enum RPCKind {
+  NoResponse = 'no-response',
+  Response = 'response',
+}
+
+export type RPC<
+  TMethods extends object,
+  TKind extends RPCKind = RPCKind.Response,
+> = TKind extends RPCKind.Response ? ResponseRPCNode<TMethods> : NoResponseRPCNode<TMethods>
+
+/**********************************************************************************/
+/*                                                                                */
+/*                                      Worker                                    */
+/*                                                                                */
+/**********************************************************************************/
+
+// /** Branded `MessagePort` */
+// export type RPCPort<T extends object> = MessagePort & { [$WORKER]: RPC<T> }
+
+// export type $Transfer<T = Array<any>, U = Array<Transferable>> = T & {
+//   [$TRANSFER]: U
+// }
+
+// export type $Callback<T = Fn> = T & { [$CALLBACK]: number }
+
+// export interface WorkerMethod<T extends Fn> {
+//   (...args: Parameters<T> | [$Transfer<Parameters<T>>]): void
+// }

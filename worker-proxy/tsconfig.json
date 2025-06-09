@@ -15,9 +15,9 @@
     "noUncheckedIndexedAccess": true,
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
-    "baseUrl": ".",
     "paths": {
       "src": ["./src"]
     }
-  }
+  },
+  "exclude": ["./service.ts", "src/fetch/node.ts"]
 }
