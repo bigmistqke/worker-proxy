@@ -1,8 +1,8 @@
 {
-  "name": "@bigmistqke/worker-proxy",
+  "name": "@bigmistqke/rpc",
   "version": "0.0.13",
   "type": "module",
-  "description": "Improve worker DX with a proxy.",
+  "description": "RPC toolkit.",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
