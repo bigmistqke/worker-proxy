@@ -1,8 +1,8 @@
 /// <reference types="node" />
 
 import { IncomingMessage, ServerResponse } from 'http'
+import { Payload } from '.'
 import { callMethod } from '../utils'
-import { Payload } from './'
 
 export function exposeNode<T extends object>(
   methods: T,
