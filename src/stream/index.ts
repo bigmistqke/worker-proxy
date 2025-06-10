@@ -9,13 +9,14 @@ import {
   callMethod,
   createCommander,
   createPromiseRegistry,
+  createReadableStream,
   defer,
   streamToAsyncIterable,
 } from '../utils'
 
 interface StreamCodec {
-  serialize(value: any): Generator<Uint8Array | (() => AsyncGenerator<Uint8Array>)>
-  deserialize(stream: ReadableStream): AsyncGenerator<any>
+  serialize(value: any, onChunk: (chunk: any) => void): void
+  deserialize(stream: ReadableStream, onChunk: (chunk: any) => void): void
 }
 
 const $STREAM_REQUEST_HEADER = 'RPC_STREAM_REQUEST_HEADER'
@@ -25,34 +26,6 @@ const decoder = new TextDecoder()
 
 export const isStreamRequest = (event: { request: Request }) =>
   event.request.headers.has($STREAM_REQUEST_HEADER)
-
-function createReadableStream() {
-  const closeHandlers = new Set<() => void>()
-  let controller: ReadableStreamDefaultController = null!
-  let closed = false
-
-  const stream = new ReadableStream({
-    start(_controller) {
-      controller = _controller
-    },
-    cancel() {
-      closeHandlers.forEach(handler => handler())
-      closed = true
-    },
-  })
-
-  return {
-    controller,
-    stream,
-    closed() {
-      return closed
-    },
-    onClose(cb: () => void) {
-      closeHandlers.add(cb)
-      return () => closeHandlers.delete(cb)
-    },
-  }
-}
 
 /**********************************************************************************/
 /*                                                                                */
@@ -67,10 +40,10 @@ export function rpc<TProxy extends object, TExpose extends object = object>(
     | Promise<ReadableStream>,
   methods: TExpose,
   codec: StreamCodec = {
-    *serialize(value: any) {
-      yield encoder.encode(`${JSON.stringify(value)}\n`)
+    serialize(value: any, onChunk: (chunk: any) => void) {
+      onChunk(encoder.encode(`${JSON.stringify(value)}\n`))
     },
-    async *deserialize(stream) {
+    async deserialize(stream, onChunk: (chunk: any) => void) {
       let buffer = ''
 
       for await (const value of streamToAsyncIterable(stream)) {
@@ -80,38 +53,31 @@ export function rpc<TProxy extends object, TExpose extends object = object>(
           const line = buffer.slice(0, newlineIndex)
           buffer = buffer.slice(newlineIndex + 1)
 
-          yield JSON.parse(line)
+          onChunk(JSON.parse(line))
         }
       }
     },
   },
 ) {
   const promiseRegistry = createPromiseRegistry()
-  const { stream, controller, closed, onClose } = createReadableStream()
+  const { stream, closed, onClose, enqueue } = createReadableStream()
 
-  async function runAsyncGenerator(generator: AsyncGenerator<Uint8Array>) {
-    for await (const chunk of generator) {
-      controller.enqueue(chunk)
-    }
-  }
-
-  ;(async function listen() {
+  ;(async () => {
     const inputStream = await (typeof reader === 'function' ? reader(stream) : reader)
-    for await (const data of codec.deserialize(inputStream)) {
+    codec.deserialize(inputStream, async data => {
       if (methods && RequestShape.validate(data) && RPCPayloadShape.validate(data.payload)) {
         const {
           payload: { topics, args },
         } = data
 
-        const response = ResponseShape.create(data, await callMethod(methods, topics, args))
-
-        for (const chunk of codec.serialize(response)) {
-          controller.enqueue(chunk)
-        }
+        codec.serialize(
+          ResponseShape.create(data, await callMethod(methods, topics, args)),
+          enqueue,
+        )
       } else if (ResponseShape.validate(data)) {
         promiseRegistry.free(data[$MESSENGER_RESPONSE])?.resolve(data.payload)
       }
-    }
+    })
   })()
 
   return {
@@ -122,15 +88,8 @@ export function rpc<TProxy extends object, TExpose extends object = object>(
       const { promise, resolve, reject } = defer()
       const id = promiseRegistry.register({ resolve, reject })
 
-      const data = RequestShape.create(id, RPCPayloadShape.create(topics, args))
+      codec.serialize(RequestShape.create(id, RPCPayloadShape.create(topics, args)), enqueue)
 
-      for (const chunk of codec.serialize(data)) {
-        if (chunk instanceof Uint8Array) {
-          controller.enqueue(chunk)
-        } else {
-          runAsyncGenerator(chunk())
-        }
-      }
       return promise
     }),
     closed,

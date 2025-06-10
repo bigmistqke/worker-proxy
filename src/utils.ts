@@ -128,3 +128,32 @@ export function streamToAsyncIterable<T>(stream: ReadableStream<T>): AsyncIterab
     },
   }
 }
+
+export function createReadableStream() {
+  const closeHandlers = new Set<() => void>()
+  let controller: ReadableStreamDefaultController = null!
+  let closed = false
+
+  const stream = new ReadableStream({
+    start(_controller) {
+      controller = _controller
+    },
+    cancel() {
+      closeHandlers.forEach(handler => handler())
+      closed = true
+    },
+  })
+
+  return {
+    controller,
+    stream,
+    enqueue: controller.enqueue.bind(controller),
+    closed() {
+      return closed
+    },
+    onClose(cb: () => void) {
+      closeHandlers.add(cb)
+      return () => closeHandlers.delete(cb)
+    },
+  }
+}

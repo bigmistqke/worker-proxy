@@ -9,7 +9,7 @@ import { RPC } from './src/types'
 const sw = self as unknown as ServiceWorkerGlobalScope
 
 const refreshes = new Set<() => void>()
-const proxies = new Array<RPC<StreamClientMethods>>()
+const proxies = new Set<RPC<StreamClientMethods>>()
 let id = 0
 let world = 'world'
 let javascript = `requestAnimationFrame(() => {
@@ -96,8 +96,13 @@ sw.addEventListener('fetch', async (event: FetchEvent) => {
     return
   }
   if (isStreamRequest(event)) {
-    const { response, proxy } = server<StreamClientMethods>(event.request.body!, methods, codec)
-    proxies.push(proxy)
+    const { response, proxy, onClose } = server<StreamClientMethods>(
+      event.request.body!,
+      methods,
+      codec,
+    )
+    proxies.add(proxy)
+    onClose(() => proxies.delete(proxy))
     event.respondWith(response)
   }
 })

@@ -190,8 +190,6 @@ function unpack(buffer: Uint8Array) {
   const rest = !payload ? undefined : buffer.slice(size)
   const id = 'id' in schema.offsets ? view.getUint32(schema.offsets.id) : undefined
 
-  // console.log('size is ', payload?.byteLength)
-
   return {
     kind,
     header,
@@ -203,7 +201,7 @@ function unpack(buffer: Uint8Array) {
 
 /**********************************************************************************/
 /*                                                                                */
-/*                                 Stream Protocol                                */
+/*                               Create Stream Codec                              */
 /*                                                                                */
 /**********************************************************************************/
 
@@ -253,7 +251,7 @@ export function createStreamCodec(config: Array<Codec>, fallback: PrimitiveCodec
   }
 
   const api = {
-    *serialize(value: any): Generator<Uint8Array | (() => AsyncGenerator<Uint8Array>)> {
+    serialize(value: any, onChunk: (chunk: Uint8Array) => void): void {
       const { codec, header } = getCodecFromValue(value)
       const currentGenerators = new Array<{
         generator: AsyncGenerator<Uint8Array>
@@ -265,45 +263,43 @@ export function createStreamCodec(config: Array<Codec>, fallback: PrimitiveCodec
       switch (codec.type) {
         case 'structural':
           const { keys, values, length } = codec.encode(value)
-          yield packDefault(header, JSONCodec.encode(length ?? keys))
+          onChunk(packDefault(header, JSONCodec.encode(length ?? keys)))
           for (const value of values) {
-            for (const chunk of api.serialize(value)) {
-              yield chunk
-            }
+            api.serialize(value, onChunk)
           }
           break
         case 'generator':
           const generator = codec.encode(value)
           const id = generatorIdAllocator.create()
           currentGenerators.push({ generator, codec, id, header })
-          yield packDefault(header, JSONCodec.encode({ id }))
+          onChunk(packDefault(header, JSONCodec.encode({ id })))
           break
         case 'primitive':
-          yield packDefault(header, codec.encode(value))
+          onChunk(packDefault(header, codec.encode(value)))
           break
         default:
           throw new Error(`Unknown Codec`)
       }
 
       if (currentGenerators.length) {
-        yield async function* () {
+        ;(async function () {
           for (const { generator, id, header } of currentGenerators) {
             for await (const value of generator) {
-              yield packChunk(id, header, value)
+              onChunk(packChunk(id, header, value))
             }
-            yield packChunkEnd(id, header)
+            onChunk(packChunkEnd(id, header))
             generatorIdAllocator.free(id)
           }
-        }
+        })()
       }
     },
-    async *deserialize(stream: ReadableStream) {
+    async deserialize(stream: ReadableStream, onChunk: (value: any) => void) {
       const generator = createChunkGenerator(stream)
 
       for await (const { payload, header, kind, id } of generator) {
         switch (kind) {
           case defaultSchema.constants.kind:
-            yield handleCodec({ codec: getCodecFromHeader(header), payload })
+            onChunk(await handleCodec({ codec: getCodecFromHeader(header), payload }))
             break
           case chunkSchema.constants.kind:
             generators[id!]!.next(payload)
