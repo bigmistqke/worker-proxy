@@ -1,9 +1,11 @@
 const MAX_UINT_32 = Math.pow(2, 32) - 1
+const encoder = new TextEncoder()
+const decoder = new TextDecoder()
 
-type Codec = StructuralCodec | PrimitiveCodec
+type Codec = StructuralCodec | PrimitiveCodec | GeneratorCodec
 
 export class PrimitiveCodec<T = any> {
-  structural = false as const
+  type = 'primitive' as const
   test: (value: any) => boolean
   encode: (value: T) => Uint8Array
   decode: (buffer: Uint8Array) => T
@@ -23,7 +25,7 @@ export class PrimitiveCodec<T = any> {
 }
 
 export class StructuralCodec<T = any> {
-  structural = true as const
+  type = 'structural' as const
   test: (value: any) => boolean
   encode: (value: T) =>
     | {
@@ -52,8 +54,25 @@ export class StructuralCodec<T = any> {
   }
 }
 
-const encoder = new TextEncoder()
-const decoder = new TextDecoder()
+export class GeneratorCodec<T = any> {
+  type = 'generator' as const
+  test: (value: any) => boolean
+  encode: (value: T) => AsyncGenerator<Uint8Array>
+  decode: (value: Uint8Array) => AsyncGenerator<T, unknown, Uint8Array>
+  constructor({
+    test,
+    encode,
+    decode,
+  }: {
+    test: GeneratorCodec<T>['test']
+    encode: GeneratorCodec<T>['encode']
+    decode: GeneratorCodec<T>['decode']
+  }) {
+    this.test = test
+    this.encode = encode
+    this.decode = decode
+  }
+}
 
 const JSONCodec = new PrimitiveCodec({
   test() {
@@ -68,71 +87,152 @@ const JSONCodec = new PrimitiveCodec({
 })
 
 export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCodec = JSONCodec) {
-  function getCodec(header: number) {
+  function getCodecFromHeader(header: number) {
     return config[header - 1] ?? fallback
   }
 
-  function encode(header: number, encoded: Uint8Array): Uint8Array {
-    const buffer = new Uint8Array(1 + 4 + encoded.length)
-    buffer[0] = header
+  function getCodecFromValue(value: any) {
+    for (let index = 0; index < config.length; index++) {
+      const codec = config[index]!
+      if (codec.test(value)) {
+        return { codec, header: 0x01 + index }
+      }
+    }
+    return { codec: fallback, header: 0x01 + config.length }
+  }
+
+  const DEFAULT_PREFIX = 1 + 1 + 4
+  function pack(header: number, encoded: Uint8Array): Uint8Array {
+    const buffer = new Uint8Array(DEFAULT_PREFIX + encoded.length)
+    buffer[0] = 0x01
+    buffer[1] = header
     const view = new DataView(buffer.buffer)
-    view.setUint32(1, encoded.length)
+    view.setUint32(2, encoded.length)
     if (encoded.length > MAX_UINT_32) throw `Tried to encode something larger than MAX_UINT_32`
-    buffer.set(encoded, 5)
+    buffer.set(encoded, DEFAULT_PREFIX)
     return buffer
   }
 
-  async function* createChunkGenerator(
-    stream: ReadableStream<Uint8Array>,
-  ): AsyncGenerator<{ header: number; length: number; payload: Uint8Array }> {
+  const CHUNK_PREFIX = 1 + 1 + 4 + 4
+  function packChunk(id: number, header: number, encoded: Uint8Array): Uint8Array {
+    const buffer = new Uint8Array(CHUNK_PREFIX + encoded.length)
+    buffer[0] = 0x02
+    buffer[1] = header
+    const view = new DataView(buffer.buffer)
+    view.setUint32(2, encoded.length)
+    view.setUint32(6, id)
+    if (encoded.length > MAX_UINT_32) throw `Tried to encode something larger than MAX_UINT_32`
+    buffer.set(encoded, CHUNK_PREFIX)
+    return buffer
+  }
+
+  function unpack(buffer: Uint8Array) {
+    const kind = buffer[0]
+    const header = buffer[1]
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+    const length = view.getUint32(2)
+    const prefix = kind === 0x01 ? DEFAULT_PREFIX : CHUNK_PREFIX
+    const payload =
+      buffer.length < prefix + length ? undefined : buffer.slice(prefix, prefix + length)
+    const rest = !payload ? undefined : buffer.slice(prefix + length)
+
+    switch (kind) {
+      case 0x01:
+        return {
+          kind,
+          header,
+          length,
+          payload,
+          rest,
+        }
+      case 0x02:
+        return {
+          kind,
+          header,
+          length,
+          id: view.getUint32(6),
+          payload,
+          rest,
+        }
+    }
+
+    throw `Incorrect kind ${kind}`
+  }
+
+  async function* createChunkGenerator(stream: ReadableStream<Uint8Array>): AsyncGenerator<{
+    kind: number
+    header: number
+    length: number
+    payload: Uint8Array
+    id?: number
+  }> {
     const reader = stream.getReader()
     let buffer = new Uint8Array(0)
 
     while (true) {
       const { value, done } = await reader.read()
+
       if (done) break
 
       // append new chunk to buffer
       buffer = concat(buffer, value!)
 
-      while (buffer.length >= 5) {
-        const header = buffer[0]!
-        const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-        const length = view.getUint32(1)
+      while (buffer.length >= DEFAULT_PREFIX) {
+        const { kind, header, length, payload, rest, id } = unpack(buffer)
 
-        if (buffer.length < 5 + length) break // wait for more data
+        if (!payload || !rest) break
 
-        const payload = buffer.slice(5, 5 + length)
+        yield { kind, header, length, payload, id }
 
-        yield { header, length, payload }
-
-        buffer = buffer.slice(5 + length) // consume
+        buffer = rest
       }
     }
   }
 
+  let streamId = 0
+  const streams: Record<string, ReadableStreamDefaultController> = {}
+  const generators = new Array<{
+    generator: AsyncGenerator<Uint8Array>
+    id: number
+    codec: GeneratorCodec
+    header: number
+  }>()
+
   const api = {
-    *serialize(value: any): Generator<Uint8Array> {
-      for (let i = 0; i < config.length; i++) {
-        const codec = config[i]!
-        if (codec.test(value)) {
-          if (codec.structural) {
-            const { keys, values, length } = codec.encode(value)
-            // Encode paths as json
-            yield encode(0x01 + i, JSONCodec.encode(length ?? keys))
-            for (const value of values) {
-              yield* api.serialize(value)
-            }
-          } else {
-            yield encode(0x01 + i, codec.encode(value))
+    *serialize(value: any): Generator<Uint8Array | (() => AsyncGenerator<Uint8Array>)> {
+      const { codec, header } = getCodecFromValue(value)
+
+      if (codec.type === 'structural') {
+        const { keys, values, length } = codec.encode(value)
+
+        yield pack(header, JSONCodec.encode(length ?? keys))
+        for (const value of values) {
+          for (const chunk of api.serialize(value)) {
+            yield chunk
           }
-          return
+        }
+      } else if (codec.type === 'generator') {
+        const generator = codec.encode(value)
+        const id = streamId++
+        generators.push({ generator, codec, id, header })
+
+        // Emit declaration
+        yield pack(header, JSONCodec.encode({ id }))
+      } else {
+        // Primitive case — just yield the encoded value
+        yield pack(header, codec.encode(value))
+      }
+
+      yield async function* () {
+        // Phase 2: Stream the live generators
+        for (const { generator, id, header } of generators) {
+          for await (const value of generator) {
+            yield packChunk(id, header, value)
+          }
         }
       }
-      throw new Error('No codec matched value')
     },
-
-    async deserialize(stream: ReadableStream) {
+    async *deserialize(stream: ReadableStream) {
       const generator = createChunkGenerator(stream)
 
       async function handleStructural({
@@ -154,10 +254,12 @@ export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCo
           if (done) break
 
           const { payload, header } = value
-          const codec = getCodec(header)
+          const codec = getCodecFromHeader(header)
 
-          if (codec.structural) {
+          if (codec.type === 'structural') {
             add(await handleStructural({ codec, payload }), key)
+          } else if (codec.type === 'generator') {
+            add(await handleGenerator({ payload, codec }), key)
           } else {
             add(codec.decode(payload), key)
           }
@@ -166,20 +268,45 @@ export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCo
         return value
       }
 
-      const {
-        done,
-        value: { payload, header },
-      } = await generator.next()
-
-      if (done) throw `Unexpected end`
-
-      const codec = getCodec(header)
-
-      if (codec.structural) {
-        return handleStructural({ payload, codec })
+      async function handleGenerator({
+        payload,
+        codec,
+      }: {
+        payload: Uint8Array
+        codec: GeneratorCodec
+      }) {
+        const { id } = JSONCodec.decode(payload)
+        let controller: ReadableStreamDefaultController = null!
+        const stream = new ReadableStream({
+          start(_controller) {
+            controller = _controller
+          },
+        })
+        streams[id] = controller
+        return stream
       }
 
-      return codec.decode(payload)
+      for await (const { payload, header, kind, id } of generator) {
+        if (kind === 0x02) {
+          streams[id!].enqueue(payload)
+        } else {
+          const codec = getCodecFromHeader(header)
+
+          switch (codec.type) {
+            case 'structural':
+              yield handleStructural({ payload, codec })
+              break
+            case 'generator':
+              yield handleGenerator({ payload, codec })
+              break
+            case 'primitive':
+              yield codec.decode(payload)
+              break
+            default:
+              throw new Error('Unknown codec')
+          }
+        }
+      }
     },
   }
 
@@ -187,12 +314,12 @@ export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCo
 }
 
 // helper to concatenate Uint8Arrays
-function concat(
-  a: Uint8Array<ArrayBuffer>,
-  b: Uint8Array<ArrayBufferLike>,
-): Uint8Array<ArrayBuffer> {
-  const result = new Uint8Array(a.length + b.length)
-  result.set(a)
-  result.set(b, a.length)
-  return result
+function concat(...arrays: Array<Uint8Array>): Uint8Array {
+  const result = new Uint8Array(arrays.reduce((a, b) => a + b.length, 0))
+  let index = 0
+  return arrays.reduce((result, current) => {
+    result.set(current, index)
+    index += current.length
+    return result
+  }, result)
 }
