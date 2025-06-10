@@ -4,28 +4,33 @@ const decoder = new TextDecoder()
 
 type Codec = StructuralCodec | PrimitiveCodec | GeneratorCodec
 
-export class PrimitiveCodec<T = any> {
-  type = 'primitive' as const
-  test: (value: any) => boolean
-  encode: (value: T) => Uint8Array
-  decode: (buffer: Uint8Array) => T
-  constructor({
-    test,
-    encode,
-    decode,
-  }: {
-    test: PrimitiveCodec<T>['test']
-    encode: PrimitiveCodec<T>['encode']
-    decode: PrimitiveCodec<T>['decode']
-  }) {
+class CodecBase<
+  TConfig extends {
+    test(value: any): boolean
+    encode(value: any): any
+    decode(value: any): any
+  },
+> {
+  test: TConfig['test']
+  encode: TConfig['encode']
+  decode: TConfig['decode']
+  constructor({ test, encode, decode }: TConfig) {
     this.test = test
     this.encode = encode
     this.decode = decode
   }
 }
 
-export class StructuralCodec<T = any> {
-  type = 'structural' as const
+export interface PrimitiveCodecMethods<T> {
+  test: (value: any) => boolean
+  encode: (value: T) => Uint8Array
+  decode: (buffer: Uint8Array) => T
+}
+export class PrimitiveCodec<T = any> extends CodecBase<PrimitiveCodecMethods<T>> {
+  type = 'primitive' as const
+}
+
+export interface StructuralCodecMethods<T> {
   test: (value: any) => boolean
   encode: (value: T) =>
     | {
@@ -38,40 +43,21 @@ export class StructuralCodec<T = any> {
         keys?: never
         values: Array<any> | IterableIterator<any>
       }
-  decode: () => { value: T; add(value: any, key: string | number): void }
-  constructor({
-    test,
-    encode,
-    decode,
-  }: {
-    test: StructuralCodec<T>['test']
-    encode: StructuralCodec<T>['encode']
-    decode: StructuralCodec<T>['decode']
-  }) {
-    this.test = test
-    this.encode = encode
-    this.decode = decode
-  }
+  decode: () => { value: T; set(value: any, key: string | number): void }
 }
 
-export class GeneratorCodec<T = any> {
-  type = 'generator' as const
+export class StructuralCodec<T = any> extends CodecBase<StructuralCodecMethods<T>> {
+  type = 'structural' as const
+}
+
+export interface GeneratorCodecMethods<T> {
   test: (value: any) => boolean
-  encode: (value: T) => AsyncGenerator<Uint8Array>
-  decode: (value: Uint8Array) => AsyncGenerator<T, unknown, Uint8Array>
-  constructor({
-    test,
-    encode,
-    decode,
-  }: {
-    test: GeneratorCodec<T>['test']
-    encode: GeneratorCodec<T>['encode']
-    decode: GeneratorCodec<T>['decode']
-  }) {
-    this.test = test
-    this.encode = encode
-    this.decode = decode
-  }
+  encode: (value: T) => AsyncGenerator<Uint8Array | undefined>
+  decode: () => AsyncGenerator<T, unknown, Uint8Array>
+}
+
+export class GeneratorCodec<T = any> extends CodecBase<GeneratorCodecMethods<T>> {
+  type = 'generator' as const
 }
 
 const JSONCodec = new PrimitiveCodec({
@@ -108,30 +94,44 @@ export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCo
     buffer[1] = header
     const view = new DataView(buffer.buffer)
     view.setUint32(2, encoded.length)
-    if (encoded.length > MAX_UINT_32) throw `Tried to encode something larger than MAX_UINT_32`
+    if (encoded.length > MAX_UINT_32)
+      throw new Error(`Tried to encode something larger than MAX_UINT_32`)
     buffer.set(encoded, DEFAULT_PREFIX)
     return buffer
   }
 
   const CHUNK_PREFIX = 1 + 1 + 4 + 4
-  function packChunk(id: number, header: number, encoded: Uint8Array): Uint8Array {
-    const buffer = new Uint8Array(CHUNK_PREFIX + encoded.length)
+  function packChunk(id: number, header: number, encoded?: Uint8Array): Uint8Array {
+    const buffer = new Uint8Array(CHUNK_PREFIX + (encoded?.length ?? 0))
     buffer[0] = 0x02
     buffer[1] = header
     const view = new DataView(buffer.buffer)
-    view.setUint32(2, encoded.length)
     view.setUint32(6, id)
-    if (encoded.length > MAX_UINT_32) throw `Tried to encode something larger than MAX_UINT_32`
-    buffer.set(encoded, CHUNK_PREFIX)
+    if (encoded) {
+      view.setUint32(2, encoded.length)
+      if (encoded.length > MAX_UINT_32)
+        throw new Error(`Tried to encode something larger than MAX_UINT_32`)
+      buffer.set(encoded, CHUNK_PREFIX)
+    }
+    return buffer
+  }
+
+  const CHUNK_END_PREFIX = 1 + 1 + 4
+  function packChunkEnd(id: number, header: number): Uint8Array {
+    const buffer = new Uint8Array(CHUNK_END_PREFIX)
+    buffer[0] = 0x03
+    buffer[1] = header
+    const view = new DataView(buffer.buffer)
+    view.setUint32(2, id)
     return buffer
   }
 
   function unpack(buffer: Uint8Array) {
-    const kind = buffer[0]
-    const header = buffer[1]
+    const kind = buffer[0]!
+    const header = buffer[1]!
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-    const length = view.getUint32(2)
-    const prefix = kind === 0x01 ? DEFAULT_PREFIX : CHUNK_PREFIX
+    const length = kind === 0x03 ? 0 : view.getUint32(2)
+    const prefix = kind === 0x01 ? DEFAULT_PREFIX : kind === 0x02 ? CHUNK_PREFIX : CHUNK_END_PREFIX
     const payload =
       buffer.length < prefix + length ? undefined : buffer.slice(prefix, prefix + length)
     const rest = !payload ? undefined : buffer.slice(prefix + length)
@@ -154,9 +154,17 @@ export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCo
           payload,
           rest,
         }
+      case 0x03:
+        return {
+          kind,
+          header,
+          id: view.getUint32(2),
+          rest,
+          payload,
+        }
+      default:
+        throw new Error(`Incorrect kind ${kind}`)
     }
-
-    throw `Incorrect kind ${kind}`
   }
 
   async function* createChunkGenerator(stream: ReadableStream<Uint8Array>): AsyncGenerator<{
@@ -167,7 +175,7 @@ export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCo
     id?: number
   }> {
     const reader = stream.getReader()
-    let buffer = new Uint8Array(0)
+    let buffer = new Uint8Array(new ArrayBuffer(0))
 
     while (true) {
       const { value, done } = await reader.read()
@@ -190,50 +198,83 @@ export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCo
   }
 
   let streamId = 0
-  const streams: Record<string, ReadableStreamDefaultController> = {}
-  const generators = new Array<{
-    generator: AsyncGenerator<Uint8Array>
-    id: number
-    codec: GeneratorCodec
-    header: number
-  }>()
+  const streams: Record<string, AsyncGenerator<unknown, unknown, Uint8Array>> = {}
 
   const api = {
     *serialize(value: any): Generator<Uint8Array | (() => AsyncGenerator<Uint8Array>)> {
       const { codec, header } = getCodecFromValue(value)
+      const generators = new Array<{
+        generator: AsyncGenerator<Uint8Array | undefined>
+        id: number
+        codec: GeneratorCodec
+        header: number
+      }>()
 
-      if (codec.type === 'structural') {
-        const { keys, values, length } = codec.encode(value)
-
-        yield pack(header, JSONCodec.encode(length ?? keys))
-        for (const value of values) {
-          for (const chunk of api.serialize(value)) {
-            yield chunk
+      switch (codec.type) {
+        case 'structural':
+          const { keys, values, length } = codec.encode(value)
+          yield pack(header, JSONCodec.encode(length ?? keys))
+          for (const value of values) {
+            for (const chunk of api.serialize(value)) {
+              yield chunk
+            }
           }
-        }
-      } else if (codec.type === 'generator') {
-        const generator = codec.encode(value)
-        const id = streamId++
-        generators.push({ generator, codec, id, header })
-
-        // Emit declaration
-        yield pack(header, JSONCodec.encode({ id }))
-      } else {
-        // Primitive case — just yield the encoded value
-        yield pack(header, codec.encode(value))
+          break
+        case 'generator':
+          const generator = codec.encode(value)
+          const id = streamId++
+          generators.push({ generator, codec, id, header })
+          yield pack(header, JSONCodec.encode({ id }))
+          break
+        case 'primitive':
+          yield pack(header, codec.encode(value))
+          break
+        default:
+          throw new Error(`Unknown Codec`)
       }
 
-      yield async function* () {
-        // Phase 2: Stream the live generators
-        for (const { generator, id, header } of generators) {
-          for await (const value of generator) {
-            yield packChunk(id, header, value)
+      if (generators.length) {
+        yield async function* () {
+          for (const { generator, id, header } of generators) {
+            for await (const value of generator) {
+              yield packChunk(id, header, value)
+            }
+            yield packChunkEnd(id, header)
           }
         }
       }
     },
     async *deserialize(stream: ReadableStream) {
       const generator = createChunkGenerator(stream)
+
+      for await (const { payload, header, kind, id } of generator) {
+        switch (kind) {
+          case 0x01:
+            const codec = getCodecFromHeader(header)
+            yield await handleCodec({ codec, payload })
+            break
+          case 0x02:
+            streams[id!].next(payload)
+            break
+          case 0x03:
+            await streams[id!].return(false)
+            delete streams[id!]
+            break
+        }
+      }
+
+      function handleCodec({ codec, payload }: { codec: Codec; payload: Uint8Array }) {
+        switch (codec.type) {
+          case 'structural':
+            return handleStructural({ payload, codec })
+          case 'generator':
+            return handleGenerator({ payload, codec })
+          case 'primitive':
+            return codec.decode(payload)
+          default:
+            throw new Error('Unknown codec')
+        }
+      }
 
       async function handleStructural({
         payload,
@@ -244,25 +285,18 @@ export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCo
       }) {
         const paths = JSONCodec.decode(payload) as Array<string> | number
 
-        const { value, add } = codec.decode()
+        const { value, set } = codec.decode()
 
         const total = typeof paths === 'number' ? paths : paths.length
 
         for (let i = 0; i < total; i++) {
-          const key = typeof paths === 'number' ? i : paths[i]
+          const key = typeof paths === 'number' ? i : paths[i]!
           const { value, done } = await generator.next()
           if (done) break
 
           const { payload, header } = value
           const codec = getCodecFromHeader(header)
-
-          if (codec.type === 'structural') {
-            add(await handleStructural({ codec, payload }), key)
-          } else if (codec.type === 'generator') {
-            add(await handleGenerator({ payload, codec }), key)
-          } else {
-            add(codec.decode(payload), key)
-          }
+          set(await handleCodec({ codec, payload }), key)
         }
 
         return value
@@ -276,36 +310,10 @@ export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCo
         codec: GeneratorCodec
       }) {
         const { id } = JSONCodec.decode(payload)
-        let controller: ReadableStreamDefaultController = null!
-        const stream = new ReadableStream({
-          start(_controller) {
-            controller = _controller
-          },
-        })
-        streams[id] = controller
-        return stream
-      }
-
-      for await (const { payload, header, kind, id } of generator) {
-        if (kind === 0x02) {
-          streams[id!].enqueue(payload)
-        } else {
-          const codec = getCodecFromHeader(header)
-
-          switch (codec.type) {
-            case 'structural':
-              yield handleStructural({ payload, codec })
-              break
-            case 'generator':
-              yield handleGenerator({ payload, codec })
-              break
-            case 'primitive':
-              yield codec.decode(payload)
-              break
-            default:
-              throw new Error('Unknown codec')
-          }
-        }
+        const generator = codec.decode()
+        const { value } = await generator.next()
+        streams[id] = generator
+        return value
       }
     },
   }
@@ -315,9 +323,9 @@ export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCo
 
 // helper to concatenate Uint8Arrays
 function concat(...arrays: Array<Uint8Array>): Uint8Array {
-  const result = new Uint8Array(arrays.reduce((a, b) => a + b.length, 0))
+  const result = new Uint8Array(new ArrayBuffer(arrays.reduce((a, b) => a + b.length, 0)))
   let index = 0
-  return arrays.reduce((result, current) => {
+  return arrays.reduce<Uint8Array>((result, current) => {
     result.set(current, index)
     index += current.length
     return result
