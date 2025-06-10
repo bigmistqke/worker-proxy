@@ -105,3 +105,26 @@ export function callMethod(methods: object, topics: string[], args: unknown[]) {
   }
   return method(...args)
 }
+
+// NOTE:  safari does not implement AsyncIterator for ReadableStream
+//        see https://caniuse.com/mdn-api_readablestream_--asynciterator
+export function streamToAsyncIterable<T>(stream: ReadableStream<T>): AsyncIterable<T> {
+  if (Symbol.asyncIterator in stream) {
+    return stream as ReadableStream<T> & AsyncIterable<T>
+  }
+  const reader = stream.getReader()
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        async next() {
+          const result = await reader.read()
+          return result as IteratorResult<T>
+        },
+        async return() {
+          reader.releaseLock()
+          return { value: undefined, done: true }
+        },
+      }
+    },
+  }
+}

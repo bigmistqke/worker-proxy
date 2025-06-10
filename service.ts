@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { codec } from './dev/codec'
 import { StreamClientMethods } from './dev/main'
 import raw from './dist/stream.js?raw'
 import { isStreamRequest, server } from './src/stream'
@@ -7,8 +8,9 @@ import { RPC } from './src/types'
 
 const sw = self as unknown as ServiceWorkerGlobalScope
 
+const refreshes = new Set<() => void>()
+const proxies = new Array<RPC<StreamClientMethods>>()
 let id = 0
-let proxies = new Array<RPC<StreamClientMethods>>()
 let world = 'world'
 let javascript = `requestAnimationFrame(() => {
 document.body.style.background = 'blue'
@@ -37,13 +39,6 @@ const methods = {
   },
 }
 export type StreamServerMethods = typeof methods
-
-interface Link {
-  stream: ReadableStream
-  link(stream: ReadableStream): void
-}
-
-const refreshes = new Set<() => void>()
 
 function createRouter(
   routes: Record<string, (event: FetchEvent) => Response>,
@@ -101,7 +96,8 @@ sw.addEventListener('fetch', async (event: FetchEvent) => {
     return
   }
   if (isStreamRequest(event)) {
-    const { response } = server(event.request.body!, methods)
+    const { response, proxy } = server<StreamClientMethods>(event.request.body!, methods, codec)
+    proxies.push(proxy)
     event.respondWith(response)
   }
 })

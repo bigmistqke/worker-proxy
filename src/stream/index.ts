@@ -5,7 +5,18 @@ import {
   RPCPayloadShape,
 } from '../message-protocol'
 import { RPC } from '../types'
-import { callMethod, createCommander, createPromiseRegistry, defer } from '../utils'
+import {
+  callMethod,
+  createCommander,
+  createPromiseRegistry,
+  defer,
+  streamToAsyncIterable,
+} from '../utils'
+
+interface StreamCodec {
+  serialize(value: any): Generator<Uint8Array | (() => AsyncGenerator<Uint8Array>)>
+  deserialize(stream: ReadableStream): AsyncGenerator<any>
+}
 
 const $STREAM_REQUEST_HEADER = 'RPC_STREAM_REQUEST_HEADER'
 
@@ -14,31 +25,6 @@ const decoder = new TextDecoder()
 
 export const isStreamRequest = (event: { request: Request }) =>
   event.request.headers.has($STREAM_REQUEST_HEADER)
-
-function send(controller: ReadableStreamDefaultController<any>, data: any) {
-  controller.enqueue(encoder.encode(JSON.stringify(data) + '\n'))
-}
-
-async function listen(
-  stream: ReadableStream | Promise<ReadableStream>,
-  callback: (payload: any) => void,
-) {
-  const reader = (await stream).getReader()
-  let buffer = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    let newlineIndex
-    while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-      const line = buffer.slice(0, newlineIndex)
-      buffer = buffer.slice(newlineIndex + 1)
-      const response = JSON.parse(line)
-      callback(response)
-    }
-  }
-}
 
 function createReadableStream() {
   const closeHandlers = new Set<() => void>()
@@ -80,20 +66,53 @@ export function rpc<TProxy extends object, TExpose extends object = object>(
     | ReadableStream
     | Promise<ReadableStream>,
   methods: TExpose,
+  codec: StreamCodec = {
+    *serialize(value: any) {
+      yield encoder.encode(`${JSON.stringify(value)}\n`)
+    },
+    async *deserialize(stream) {
+      let buffer = ''
+
+      for await (const value of streamToAsyncIterable(stream)) {
+        buffer += decoder.decode(value, { stream: true })
+        let newlineIndex
+        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, newlineIndex)
+          buffer = buffer.slice(newlineIndex + 1)
+
+          yield JSON.parse(line)
+        }
+      }
+    },
+  },
 ) {
   const promiseRegistry = createPromiseRegistry()
   const { stream, controller, closed, onClose } = createReadableStream()
 
-  listen(typeof reader === 'function' ? reader(stream) : reader, async data => {
-    if (methods && RequestShape.validate(data) && RPCPayloadShape.validate(data.payload)) {
-      const {
-        payload: { topics, args },
-      } = data
-      send(controller, ResponseShape.create(data, await callMethod(methods, topics, args)))
-    } else if (ResponseShape.validate(data)) {
-      promiseRegistry.free(data[$MESSENGER_RESPONSE])?.resolve(data.payload)
+  async function runAsyncGenerator(generator: AsyncGenerator<Uint8Array>) {
+    for await (const chunk of generator) {
+      controller.enqueue(chunk)
     }
-  })
+  }
+
+  ;(async function listen() {
+    const inputStream = await (typeof reader === 'function' ? reader(stream) : reader)
+    for await (const data of codec.deserialize(inputStream)) {
+      if (methods && RequestShape.validate(data) && RPCPayloadShape.validate(data.payload)) {
+        const {
+          payload: { topics, args },
+        } = data
+
+        const response = ResponseShape.create(data, await callMethod(methods, topics, args))
+
+        for (const chunk of codec.serialize(response)) {
+          controller.enqueue(chunk)
+        }
+      } else if (ResponseShape.validate(data)) {
+        promiseRegistry.free(data[$MESSENGER_RESPONSE])?.resolve(data.payload)
+      }
+    }
+  })()
 
   return {
     proxy: createCommander<RPC<TProxy>>(async (topics, args) => {
@@ -102,7 +121,16 @@ export function rpc<TProxy extends object, TExpose extends object = object>(
       }
       const { promise, resolve, reject } = defer()
       const id = promiseRegistry.register({ resolve, reject })
-      send(controller, RequestShape.create(id, RPCPayloadShape.create(topics, args)))
+
+      const data = RequestShape.create(id, RPCPayloadShape.create(topics, args))
+
+      for (const chunk of codec.serialize(data)) {
+        if (chunk instanceof Uint8Array) {
+          controller.enqueue(chunk)
+        } else {
+          runAsyncGenerator(chunk())
+        }
+      }
       return promise
     }),
     closed,
@@ -126,6 +154,7 @@ export function rpc<TProxy extends object, TExpose extends object = object>(
 export function client<TProxy extends object, TExpose extends object = object>(
   url: string,
   methods: TExpose,
+  codec?: StreamCodec,
 ) {
   return rpc<TProxy, TExpose>(
     stream =>
@@ -142,6 +171,7 @@ export function client<TProxy extends object, TExpose extends object = object>(
         },
       }).then(response => response.body!),
     methods,
+    codec,
   )
 }
 
@@ -155,8 +185,9 @@ export function client<TProxy extends object, TExpose extends object = object>(
 export function server<TProxy extends object, TExpose extends object = object>(
   reader: ReadableStream,
   methods: TExpose,
+  codec?: StreamCodec,
 ) {
-  const { proxy, closed, onClose, stream } = rpc<TProxy, TExpose>(reader, methods)
+  const { proxy, closed, onClose, stream } = rpc<TProxy, TExpose>(reader, methods, codec)
   return {
     proxy,
     closed,

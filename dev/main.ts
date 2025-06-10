@@ -1,11 +1,6 @@
-import { expose, rpc } from 'src/messenger'
 import { client } from 'src/stream'
 import { StreamServerMethods } from '../service'
-import { IframeMethods } from './iframe'
-import type { WorkerGlobalMethods } from './worker-global'
-import WorkerGlobal from './worker-global.ts?worker'
-import type { WorkerPortMethods } from './worker-port'
-import WorkerPort from './worker-port.ts?worker'
+import { codec } from './codec'
 
 export interface SSEMethods {
   log(...values: Array<any>): void
@@ -24,7 +19,7 @@ function createCursor(id: number) {
   container.style.position = 'fixed'
   container.style.top = '0px'
   container.style.left = '0px'
-  container.style.zIndex = -1
+  container.style.zIndex = '-1'
   container.appendChild(element)
   document.body.appendChild(container)
   return container
@@ -61,36 +56,6 @@ function element<K extends keyof HTMLElementTagNameMap>({
   return element
 }
 
-// async function handshake(type: 'hand' | 'shake') {
-//   const methods = {
-//     hand() {
-//       element({ tagName: 'span', textContent: 'hand', parentElement: document.body })
-
-//       console.log('hand')
-//     },
-//     shake() {
-//       element({ tagName: 'span', textContent: 'shake', parentElement: document.body })
-//       console.log('shake')
-//     },
-//   }
-
-//   const { proxy } = client<typeof methods>(type, methods)
-
-//   setInterval(() => {
-//     proxy[type]()
-//   }, 1_000)
-// }
-
-// const handButton = document.createElement('button')
-// document.body.appendChild(handButton)
-// handButton.onclick = () => handshake('hand')
-// handButton.textContent = 'hand'
-
-// const shakeButton = document.createElement('button')
-// document.body.appendChild(shakeButton)
-// shakeButton.onclick = () => handshake('shake')
-// shakeButton.textContent = 'shake'
-
 const playground = element({
   tagName: 'iframe',
   src: '/hallo/index.html',
@@ -126,7 +91,8 @@ let textarea: HTMLTextAreaElement
 navigator.serviceWorker
   .register(new URL('../service.ts', import.meta.url), { type: 'module' })
   .then(async () => {
-    const { proxy } = client<StreamServerMethods>('stream', streamClientMethods)
+    const { proxy } = client<StreamServerMethods>('stream', streamClientMethods, codec)
+
     const id = await proxy.getId()
 
     getJavascript = proxy.getJavascript
@@ -148,30 +114,3 @@ navigator.serviceWorker
       },
     })
   })
-
-// Worker with globally exposed methods
-const { ping } = rpc<WorkerGlobalMethods>(new WorkerGlobal())
-ping(performance.now()).then(value => console.log('resolved from worker-global:', value))
-
-// Worker with methods exposed through MessagePort
-new WorkerPort().addEventListener('message', event => {
-  const proxy = rpc<WorkerPortMethods>(event.data)
-  proxy.ping(performance.now()).then(value => console.log('resolved from worker-port:', value))
-})
-
-// Iframe with globally exposed methods
-const iframe = document.querySelector('iframe')
-iframe?.addEventListener('load', event => {
-  const iframeWindow = (event.currentTarget as HTMLIFrameElement)!.contentWindow!
-  const proxy = rpc<IframeMethods>(iframeWindow)
-  proxy.ping(performance.now()).then(value => console.log('resolved from iframe:', value))
-})
-
-// Globally expose methods (to be consumed in p.ex iframe)
-const methods = {
-  ping(value: number) {
-    console.log('ping from main thread', value)
-  },
-}
-expose(methods)
-export type MainMethods = typeof methods

@@ -1,28 +1,8 @@
-import { createIdAllocator } from '../utils'
+import { createIdAllocator, streamToAsyncIterable } from '../utils'
 
 const MAX_UINT_32 = Math.pow(2, 32) - 1
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
-
-// NOTE:  safari does not implement AsyncIterator for ReadableStream
-//        see https://caniuse.com/mdn-api_readablestream_--asynciterator
-export function streamToAsyncIterable<T>(stream: ReadableStream<T>): AsyncIterable<T> {
-  const reader = stream.getReader()
-  return {
-    [Symbol.asyncIterator]() {
-      return {
-        async next() {
-          const result = await reader.read()
-          return result as IteratorResult<T>
-        },
-        async return() {
-          reader.releaseLock()
-          return { value: undefined, done: true }
-        },
-      }
-    },
-  }
-}
 
 /**********************************************************************************/
 /*                                                                                */
@@ -96,7 +76,8 @@ const JSONCodec = new PrimitiveCodec({
     return encoder.encode(JSON.stringify(value))
   },
   decode(value) {
-    return JSON.parse(decoder.decode(value))
+    const json = decoder.decode(value)
+    return json ? JSON.parse(json) : undefined
   },
 })
 
@@ -209,6 +190,8 @@ function unpack(buffer: Uint8Array) {
   const rest = !payload ? undefined : buffer.slice(size)
   const id = 'id' in schema.offsets ? view.getUint32(schema.offsets.id) : undefined
 
+  // console.log('size is ', payload?.byteLength)
+
   return {
     kind,
     header,
@@ -224,7 +207,7 @@ function unpack(buffer: Uint8Array) {
 /*                                                                                */
 /**********************************************************************************/
 
-export function createStreamProtocol(config: Array<Codec>, fallback: PrimitiveCodec = JSONCodec) {
+export function createStreamCodec(config: Array<Codec>, fallback: PrimitiveCodec = JSONCodec) {
   config = [...config, fallback]
   const generatorIdAllocator = createIdAllocator()
   const generators: Record<string, AsyncGenerator<unknown, unknown, Uint8Array>> = {}
