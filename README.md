@@ -1,4 +1,4 @@
-# `@bigmistqke/worker-proxy`
+# `@bigmistqke/rpc`
 
 Library to improve worker DX, similar to [ComLink](https://github.com/GoogleChromeLabs/comlink).
 
@@ -16,22 +16,22 @@ Library to improve worker DX, similar to [ComLink](https://github.com/GoogleChro
 pnpm
 
 ```bash
-pnpm add --save-dev @bigmistqke/vite-plugin-worker-proxy
-pnpm add @bigmistqke/worker-proxy
+pnpm add --save-dev @bigmistqke/vite-plugin-rpc
+pnpm add @bigmistqke/rpc
 ```
 
 npm
 
 ```bash
-npm add --save-dev @bigmistqke/vite-plugin-worker-proxy
-npm add @bigmistqke/worker-proxy
+npm add --save-dev @bigmistqke/vite-plugin-rpc
+npm add @bigmistqke/rpc
 ```
 
 yarn
 
 ```bash
-yarn add --dev @bigmistqke/vite-plugin-worker-proxy
-yarn add --dev @bigmistqke/worker-proxy
+yarn add --dev @bigmistqke/vite-plugin-rpc
+yarn add --dev @bigmistqke/rpc
 ```
 
 ## Basic Example
@@ -54,7 +54,7 @@ worker.logger.log('hello', 'bigmistqke')
 **worker.ts**
 
 ```tsx
-import { type WorkerProps, registerMethods } from '@bigmistqke/worker-proxy'
+import { type WorkerProps, registerMethods } from '@bigmistqke/rpc'
 
 class Logger {
   log(...args: Array<string>) {
@@ -73,7 +73,7 @@ export default registerMethods({
 ```
 
 <details>
-<summary>Only <b>paths that lead to methods</b> are available from the worker-proxy.</summary>
+<summary>Only <b>paths that lead to methods</b> are available from the rpc.</summary>
 
 All non-function values (even deeply nested ones) are stripped out from the types.
 
@@ -129,7 +129,7 @@ worker.$async.ask('question').then(console.log)
 **worker.ts**
 
 ```tsx
-import { registerMethods } from '@bigmistqke/worker-proxy'
+import { registerMethods } from '@bigmistqke/rpc'
 
 export default registerMethods({
   ask(question: string) {
@@ -145,7 +145,7 @@ Transfer `Transferables` to/from WorkerProxies with `$transfer(...)`
 **main.ts**
 
 ```tsx
-import { $transfer } from '@bigmistqke/worker-proxy'
+import { $transfer } from '@bigmistqke/rpc'
 import type Methods from './worker.ts'
 
 const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
@@ -162,7 +162,7 @@ worker.$async.getBuffer().then(console.log)
 **worker.ts**
 
 ```tsx
-import { registerMethods } from '@bigmistqke/worker-proxy'
+import { registerMethods } from '@bigmistqke/rpc'
 
 let buffer: ArrayBuffer
 
@@ -189,7 +189,7 @@ Expose a WorkerProxy's API to another WorkerProxy with `worker.$port()` and `cre
 **main.ts**
 
 ```tsx
-import { $transfer } from '@bigmistqke/worker-proxy'
+import { $transfer } from '@bigmistqke/rpc'
 import type HalloMethods from './hallo-worker.ts'
 import type GoodbyeMethods from './goodbye-worker.ts'
 
@@ -213,7 +213,7 @@ import {
   type WorkerProxyPort,
   createWorkerProxy,
   registerMethods,
-} from '@bigmistqke/worker-proxy'
+} from '@bigmistqke/rpc'
 import type GoodbyeMethods from './goodbye-worker'
 
 let goodbyeWorker: WorkerProxy<GoodbyeMethods>
@@ -233,7 +233,7 @@ export default registerMethods({
 **goodbye-worker.ts**
 
 ```tsx
-import { registerMethods } from '@bigmistqke/worker-proxy'
+import { registerMethods } from '@bigmistqke/rpc'
 
 export default registerMethods({
   goodbye() {
@@ -271,7 +271,7 @@ worker.callback(console.log)
 **worker.ts**
 
 ```tsx
-import { registerMethods } from '@bigmistqke/worker-proxy'
+import { registerMethods } from '@bigmistqke/rpc'
 
 export default registerMethods({
   callback(cb: (message: string) => void) {
@@ -289,7 +289,7 @@ You can also manually serialize and deserialize with `$callback` and `$apply`. T
 
 ```tsx
 import type Methods from './worker.ts'
-import { $callback } from '@bigmistqke/worker-proxy'
+import { $callback } from '@bigmistqke/rpc'
 
 const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
 
@@ -299,7 +299,7 @@ worker.callback({ log: $callback(console.log) })
 **worker.ts**
 
 ```tsx
-import { $apply, type Callback, registerMethods } from '@bigmistqke/worker-proxy'
+import { $apply, type Callback, registerMethods } from '@bigmistqke/rpc'
 
 export default registerMethods({
   callback({ log }: { log: Callback<(message: string) => void> }) {
