@@ -9,5 +9,15 @@
   </head>
   <body>
     <div id="app"></div>
+    <script>
+      // Handle SPA redirect from 404.html
+      (function() {
+        var redirect = sessionStorage.getItem('redirect');
+        if (redirect) {
+          sessionStorage.removeItem('redirect');
+          history.replaceState(null, '', redirect);
+        }
+      })();
+    </script>
   </body>
 </html>
