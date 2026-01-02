@@ -1,6 +1,6 @@
 /* @refresh reload */
 import { Route, Router } from '@solidjs/router'
-import { isDev, render } from 'solid-js/web'
+import { render } from 'solid-js/web'
 import Layout from './App'
 import Fetch from './pages/Fetch'
 import Home from './pages/Home'
@@ -11,7 +11,7 @@ import './styles.css'
 
 render(
   () => (
-    <Router base={isDev ? '.' : 'https://bigmistqke.github.io/rpc/'} root={Layout}>
+    <Router base="rpc" root={Layout}>
       <Route path="/" component={Home} />
       <Route path="/messenger" component={Messenger} />
       <Route path="/fetch" component={Fetch} />
