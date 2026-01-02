@@ -27,7 +27,7 @@
     "build": "tsup",
     "test": "vitest run",
     "bump": "bumpp",
-    "prepublishOnly": "pnpm build && pnpm bump"
+    "prepublishOnly": "pnpm build"
   },
   "license": "MIT",
   "devDependencies": {
