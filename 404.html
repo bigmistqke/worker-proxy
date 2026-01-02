@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <title>Redirecting...</title>
     <script>
-      // Redirect to index.html with the path stored in sessionStorage
-      sessionStorage.setItem('redirect', location.pathname + location.search + location.hash);
-      location.replace('/rpc/');
+      // Redirect to index.html with the path in query param
+      var path = location.pathname.replace('/rpc', '') || '/';
+      location.replace('/rpc/?redirect=' + encodeURIComponent(path + location.search + location.hash));
     </script>
   </head>
   <body>
