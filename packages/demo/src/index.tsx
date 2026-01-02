@@ -1,17 +1,17 @@
 /* @refresh reload */
-import { render } from 'solid-js/web'
-import { Router, Route } from '@solidjs/router'
+import { Route, Router } from '@solidjs/router'
+import { isDev, render } from 'solid-js/web'
 import Layout from './App'
+import Fetch from './pages/Fetch'
 import Home from './pages/Home'
 import Messenger from './pages/Messenger'
-import Fetch from './pages/Fetch'
-import Stream from './pages/Stream'
 import SSE from './pages/SSE'
+import Stream from './pages/Stream'
 import './styles.css'
 
 render(
   () => (
-    <Router root={Layout}>
+    <Router base={isDev ? '.' : 'https://bigmistqke.github.io/rpc/'} root={Layout}>
       <Route path="/" component={Home} />
       <Route path="/messenger" component={Messenger} />
       <Route path="/fetch" component={Fetch} />
