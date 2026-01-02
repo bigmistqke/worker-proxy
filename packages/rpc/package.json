@@ -11,16 +11,16 @@
       "types": "./dist/messenger.d.ts"
     },
     "./stream": {
-      "import": "./dist/stream/index.js",
-      "types": "./dist/stream/index.d.ts"
+      "import": "./dist/stream.js",
+      "types": "./dist/stream.d.ts"
     },
     "./fetch": {
-      "import": "./dist/fetch/index.js",
-      "types": "./dist/fetch/index.d.ts"
+      "import": "./dist/fetch.js",
+      "types": "./dist/fetch.d.ts"
     },
     "./fetch/node": {
-      "import": "./dist/fetch/node.js",
-      "types": "./dist/fetch/node.d.ts"
+      "import": "./dist/fetch-node.js",
+      "types": "./dist/fetch-node.d.ts"
     }
   },
   "scripts": {

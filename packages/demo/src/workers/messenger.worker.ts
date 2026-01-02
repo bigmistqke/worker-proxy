@@ -1,4 +1,4 @@
-import { expose } from '../../../rpc-proxy/src/messenger'
+import { expose } from '@bigmistqke/rpc/messenger'
 
 // Define methods to expose to the main thread
 const methods = {

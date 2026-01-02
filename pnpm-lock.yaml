@@ -56,25 +56,6 @@ importers:
         specifier: 0.28.5
         version: 0.28.5
 
-  packages/rpc-proxy:
-    dependencies:
-      '@types/node':
-        specifier: ^22.15.30
-        version: 22.15.30
-      valibot:
-        specifier: ^1.0.0
-        version: 1.0.0(typescript@5.7.2)
-    devDependencies:
-      tsup:
-        specifier: 6.6.3
-        version: 6.6.3(postcss@8.5.3)(typescript@5.7.2)
-      typescript:
-        specifier: ^5.7.2
-        version: 5.7.2
-      vitest:
-        specifier: 0.28.5
-        version: 0.28.5
-
 packages:
 
   '@babel/code-frame@7.27.1':
