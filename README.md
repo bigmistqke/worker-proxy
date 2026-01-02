@@ -1,310 +1,148 @@
-# `@bigmistqke/rpc`
+# @bigmistqke/rpc
 
-Library to improve worker DX, similar to [ComLink](https://github.com/GoogleChromeLabs/comlink).
+Type-safe RPC toolkit for communication across Workers, iframes, and network boundaries.
 
-## Table of Contents
-
-- [Getting Started](#getting-started)
-- [Basic Example](#basic-example)
-- [$transfer](#transfer) _Transfer `Transferables`_
-- [$async](#async) _Await responses of worker-methods_
-- [$port](#port) _Expose a WorkerProxy's api to another WorkerProxy_
-- [Callbacks](#callbacks) _Serialize callbacks to workers_
-
-## Getting Started
-
-pnpm
+## Installation
 
 ```bash
-pnpm add --save-dev @bigmistqke/vite-plugin-rpc
-pnpm add @bigmistqke/rpc
+npm install @bigmistqke/rpc
 ```
 
-npm
+## Features
 
-```bash
-npm add --save-dev @bigmistqke/vite-plugin-rpc
-npm add @bigmistqke/rpc
-```
+- **Type-safe**: Full TypeScript support with inferred types
+- **Multiple transports**: Works with Web Workers, iframes, fetch, and streams
+- **Nested methods**: Support for deeply nested method calls
+- **Lightweight**: Minimal dependencies
 
-yarn
+## Modules
 
-```bash
-yarn add --dev @bigmistqke/vite-plugin-rpc
-yarn add --dev @bigmistqke/rpc
-```
+### `@bigmistqke/rpc/messenger`
 
-## Basic Example
+Request-response RPC over `postMessage` for Workers and iframes.
 
-**main.ts**
-
-```tsx
-import type Methods from './worker.ts'
-
-// Create WorkerProxy
-const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
-
-// Call ping-method of worker
-worker.ping()
-
-// Call log-method of worker.logger
-worker.logger.log('hello', 'bigmistqke')
-```
-
-**worker.ts**
-
-```tsx
-import { type WorkerProps, registerMethods } from '@bigmistqke/rpc'
-
-class Logger {
-  log(...args: Array<string>) {
-    console.log(...args)
-  }
-}
-
-// Initialize worker-methods with registerMethods
-// Default export types of methods to infer the WorkerProxy's type
-export default registerMethods({
-  logger: new Logger(),
-  ping() {
-    console.log('ping')
-  },
-})
-```
-
-<details>
-<summary>Only <b>paths that lead to methods</b> are available from the rpc.</summary>
-
-All non-function values (even deeply nested ones) are stripped out from the types.
+**Worker:**
 
 ```ts
-// worker.ts
-export default registerMethods({
-  state: 'ignore'
-  nested: {
-    state: 'ignore',
-    ignored: {
-      state: 'ignore'
-    },
-    method() {
-      return 'not ignored'
+import { expose } from '@bigmistqke/rpc/messenger'
+
+const methods = {
+  greet: (name: string) => `Hello, ${name}!`,
+  add: (a: number, b: number) => a + b,
+  math: {
+    square: (n: number) => n * n,
+    factorial: (n: number): number => (n <= 1 ? 1 : n * methods.math.factorial(n - 1)),
+  },
+}
+
+expose(methods)
+
+export type Methods = typeof methods
+```
+
+**Main thread:**
+
+```ts
+import { rpc } from '@bigmistqke/rpc/messenger'
+import type { Methods } from './worker'
+
+const worker = new Worker('./worker.ts', { type: 'module' })
+const proxy = rpc<Methods>(worker)
+
+await proxy.greet('World') // "Hello, World!"
+await proxy.add(2, 3) // 5
+await proxy.math.square(4) // 16
+```
+
+### `@bigmistqke/rpc/fetch`
+
+RPC over HTTP fetch requests.
+
+**Server (e.g., Cloudflare Worker):**
+
+```ts
+import { expose, isFetchRequest } from '@bigmistqke/rpc/fetch'
+
+const methods = {
+  hello: () => 'Hello from server!',
+  echo: (msg: string) => msg,
+}
+
+export default {
+  async fetch(request: Request) {
+    if (isFetchRequest({ request })) {
+      return expose(methods)({ request })
     }
-  }
-})
+    return new Response('Not found', { status: 404 })
+  },
+}
 
-// main.ts
-import type Methods from './worker.ts'
-import Worker from './worker.ts?worker'
-
-const workerProxy = createWorkerProxy<Methods>(new Worker())
+export type Methods = typeof methods
 ```
 
-The resulting type of `workerProxy` will be:
+**Client:**
 
 ```ts
-{
-  nested: {
-    method(): string
-  }
+import { rpc } from '@bigmistqke/rpc/fetch'
+import type { Methods } from './server'
+
+const proxy = rpc<Methods>('https://api.example.com')
+
+await proxy.hello() // "Hello from server!"
+await proxy.echo('test') // "test"
+```
+
+### `@bigmistqke/rpc/stream`
+
+Bidirectional RPC over streams for persistent connections.
+
+**Server:**
+
+```ts
+import { server, isStreamRequest } from '@bigmistqke/rpc/stream'
+
+const serverMethods = {
+  ping: () => 'pong',
+}
+
+export default {
+  async fetch(request: Request) {
+    if (isStreamRequest({ request })) {
+      const { proxy, response } = server<ClientMethods, typeof serverMethods>(
+        request.body!,
+        serverMethods,
+      )
+
+      // Call client methods
+      await proxy.clientMethod()
+
+      return response
+    }
+  },
 }
 ```
 
-</details>
+**Client:**
 
-## $async
+```ts
+import { client } from '@bigmistqke/rpc/stream'
 
-Await responses of WorkerProxy-methods with `worker.$async.method(...)`
+const clientMethods = {
+  clientMethod: () => 'called from server',
+}
 
-**main.ts**
+const { proxy } = client<ServerMethods, typeof clientMethods>(
+  'https://api.example.com',
+  clientMethods,
+)
 
-```tsx
-import type Methods from './worker.ts'
-
-const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
-
-// Call async version of ask-method
-worker.$async.ask('question').then(console.log)
+await proxy.ping() // "pong"
 ```
 
-**worker.ts**
+## Demo
 
-```tsx
-import { registerMethods } from '@bigmistqke/rpc'
+Check out the [live demo](https://bigmistqke.github.io/rpc/) to see all modules in action.
 
-export default registerMethods({
-  ask(question: string) {
-    return 'Answer'
-  },
-})
-```
+## License
 
-## $transfer
-
-Transfer `Transferables` to/from WorkerProxies with `$transfer(...)`
-
-**main.ts**
-
-```tsx
-import { $transfer } from '@bigmistqke/rpc'
-import type Methods from './worker.ts'
-
-const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
-
-const buffer = new ArrayBuffer()
-
-// Transfer buffer to worker
-worker.setBuffer($transfer(buffer, [buffer]))
-
-// Call async version of getBuffer and log awaited results
-worker.$async.getBuffer().then(console.log)
-```
-
-**worker.ts**
-
-```tsx
-import { registerMethods } from '@bigmistqke/rpc'
-
-let buffer: ArrayBuffer
-
-export default registerMethods({
-  setBuffer(_buffer: ArrayBuffer) {
-    buffer = _buffer
-  },
-  getBuffer() {
-    // Transfer buffer from worker back to main thread
-    return $transfer(buffer, [buffer])
-  },
-})
-```
-
-## $port
-
-Expose a WorkerProxy's API to another WorkerProxy with `worker.$port()` and `createWorkerProxy(port)`:
-
-- `worker.$port()` returns a branded `MessagePort`:
-  - `WorkerProxyPort<T> = MessagePort & { $: T }`
-- `createWorkerProxy` accepts `Worker` and `WorkerProxyPort` as argument.
-  - When given a `WorkerProxyPort` it infers its type from the branded type.
-
-**main.ts**
-
-```tsx
-import { $transfer } from '@bigmistqke/rpc'
-import type HalloMethods from './hallo-worker.ts'
-import type GoodbyeMethods from './goodbye-worker.ts'
-
-const halloWorker = createWorkerProxy<HalloMethods>(new Worker('./hallo-worker.ts'))
-const goodbyeWorker = createWorkerProxy<GoodbyeMethods>(new Worker('./goodbye-worker.ts'))
-
-// Get a WorkerProxyPort of goodbyeWorker
-const port = goodbyeWorker.$port()
-
-// Transfer the WorkerProxyPort to halloWorker
-halloWorker.link($transfer(port, [port]))
-
-halloWorker.hallo()
-```
-
-**hallo-worker.ts**
-
-```tsx
-import {
-  type WorkerProxy,
-  type WorkerProxyPort,
-  createWorkerProxy,
-  registerMethods,
-} from '@bigmistqke/rpc'
-import type GoodbyeMethods from './goodbye-worker'
-
-let goodbyeWorker: WorkerProxy<GoodbyeMethods>
-
-export default registerMethods({
-  hallo() {
-    console.log('hallo')
-    setTimeout(() => goodbyeWorker.goodbye(), 1000)
-  },
-  link(port: WorkerProxyPort<typeof GoodbyeWorkerApi>) {
-    // Create WorkerProxy from the given WorkerProxyPort
-    goodbyeWorker = createWorkerProxy(port)
-  },
-})
-```
-
-**goodbye-worker.ts**
-
-```tsx
-import { registerMethods } from '@bigmistqke/rpc'
-
-export default registerMethods({
-  goodbye() {
-    console.log('goodbye')
-  },
-})
-```
-
-## Callbacks
-
-Callbacks are automatically serialized and passed to the worker, but only when they are not embedded within an object/array.
-
-```tsx
-// ✅
-worker.callback(console.log)
-worker.callback('test', { id: 'user' }, console.log)
-
-// ❌
-worker.callback({ log: console.log })
-
-// ❌
-worker.callback([console.log])
-```
-
-**main.ts**
-
-```tsx
-import type Methods from './worker.ts'
-
-const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
-
-worker.callback(console.log)
-```
-
-**worker.ts**
-
-```tsx
-import { registerMethods } from '@bigmistqke/rpc'
-
-export default registerMethods({
-  callback(cb: (message: string) => void) {
-    cb('hallo')
-    setTimeout(() => cb('world'), 1000)
-  },
-})
-```
-
-### Manually serialize/deserialize with `$callback` and `$apply`
-
-You can also manually serialize and deserialize with `$callback` and `$apply`. This can be handy if you prefer explicitness or if you want to pass a callback nested inside object/array.
-
-**main.ts**
-
-```tsx
-import type Methods from './worker.ts'
-import { $callback } from '@bigmistqke/rpc'
-
-const worker = createWorkerProxy<Methods>(new Worker('./worker.ts'))
-
-worker.callback({ log: $callback(console.log) })
-```
-
-**worker.ts**
-
-```tsx
-import { $apply, type Callback, registerMethods } from '@bigmistqke/rpc'
-
-export default registerMethods({
-  callback({ log }: { log: Callback<(message: string) => void> }) {
-    $apply(log, 'hallo')
-    setTimeout(() => $apply(log, 'hallo'), 1000)
-  },
-})
-```
+MIT
