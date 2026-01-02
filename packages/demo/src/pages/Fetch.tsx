@@ -1,5 +1,6 @@
-import { Component, createSignal, onMount, For } from 'solid-js'
 import { rpc } from '@bigmistqke/rpc/fetch'
+import { Component, createSignal, For, onMount } from 'solid-js'
+import { BASE } from '../constants'
 import type { FetchMethods } from '../workers/service.worker'
 
 interface LogEntry {
@@ -16,7 +17,7 @@ const Fetch: Component = () => {
   const [newUserEmail, setNewUserEmail] = createSignal('john@example.com')
   const [echoMessage, setEchoMessage] = createSignal('Hello!')
 
-  const proxy = rpc<FetchMethods>('/api')
+  const proxy = rpc<FetchMethods>(`${BASE}/api`)
 
   const log = (type: LogEntry['type'], message: string) => {
     setLogs(prev => [...prev, { type, message, timestamp: Date.now() }])
@@ -26,8 +27,8 @@ const Fetch: Component = () => {
     // Register service worker from public folder
     if ('serviceWorker' in navigator) {
       try {
-        const registration = await navigator.serviceWorker.register('/service-worker.js', {
-          scope: '/',
+        const registration = await navigator.serviceWorker.register(`${BASE}/service-worker.js`, {
+          scope: `${BASE}/`,
         })
         await navigator.serviceWorker.ready
         setReady(true)
@@ -107,7 +108,9 @@ const Fetch: Component = () => {
             <h2>User API</h2>
 
             <div style={{ 'margin-bottom': '1rem' }}>
-              <label style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}>
+              <label
+                style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}
+              >
                 User ID:
               </label>
               <input
@@ -132,7 +135,9 @@ const Fetch: Component = () => {
             <h2>Create User</h2>
 
             <div style={{ 'margin-bottom': '1rem' }}>
-              <label style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}>
+              <label
+                style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}
+              >
                 Name:
               </label>
               <input
@@ -143,7 +148,9 @@ const Fetch: Component = () => {
             </div>
 
             <div style={{ 'margin-bottom': '1rem' }}>
-              <label style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}>
+              <label
+                style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}
+              >
                 Email:
               </label>
               <input
@@ -162,7 +169,9 @@ const Fetch: Component = () => {
             <h2>Nested API</h2>
 
             <div style={{ 'margin-bottom': '1rem' }}>
-              <label style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}>
+              <label
+                style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}
+              >
                 Echo Message:
               </label>
               <input
@@ -185,7 +194,7 @@ const Fetch: Component = () => {
           <div class="card">
             <h2>Code</h2>
             <div class="code-block">
-{`// service-worker.ts
+              {`// service-worker.ts
 import { expose, isFetchRequest } from '@bigmistqke/rpc/fetch'
 
 const handler = expose({
@@ -214,7 +223,14 @@ await proxy.api.status()    // { status: "ok" }`}
 
         <div>
           <div class="card">
-            <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '1rem' }}>
+            <div
+              style={{
+                display: 'flex',
+                'justify-content': 'space-between',
+                'align-items': 'center',
+                'margin-bottom': '1rem',
+              }}
+            >
               <h2>Output</h2>
               <button
                 class="button"

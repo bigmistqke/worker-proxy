@@ -13,7 +13,8 @@
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "preserve",
-    "jsxImportSource": "solid-js"
+    "jsxImportSource": "solid-js",
+    "types": ["vite/client"]
   },
-  "include": ["src"]
+  "include": ["src", "src/workers/service.worker.ts", "src/constants.ts"]
 }

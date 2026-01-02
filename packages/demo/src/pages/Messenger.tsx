@@ -1,6 +1,7 @@
-import { Component, createSignal, onMount, onCleanup, For } from 'solid-js'
 import { rpc } from '@bigmistqke/rpc/messenger'
+import { Component, createSignal, For, onCleanup, onMount } from 'solid-js'
 import type { WorkerMethods } from '../workers/messenger.worker'
+import Worker from '../workers/messenger.worker.ts?worker'
 
 interface LogEntry {
   type: 'request' | 'response' | 'error'
@@ -24,9 +25,7 @@ const Messenger: Component = () => {
   }
 
   onMount(() => {
-    worker = new Worker(new URL('../workers/messenger.worker.ts', import.meta.url), {
-      type: 'module',
-    })
+    worker = new Worker()
 
     proxy = rpc<WorkerMethods>(worker)
     setConnected(true)
@@ -126,7 +125,9 @@ const Messenger: Component = () => {
             <h2>Try It</h2>
 
             <div style={{ 'margin-bottom': '1rem' }}>
-              <label style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}>
+              <label
+                style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}
+              >
                 Name:
               </label>
               <input
@@ -139,7 +140,13 @@ const Messenger: Component = () => {
 
             <div style={{ display: 'flex', gap: '1rem', 'margin-bottom': '1rem' }}>
               <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    'margin-bottom': '0.5rem',
+                    color: 'var(--text-muted)',
+                  }}
+                >
                   A:
                 </label>
                 <input
@@ -150,7 +157,13 @@ const Messenger: Component = () => {
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', 'margin-bottom': '0.5rem', color: 'var(--text-muted)' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    'margin-bottom': '0.5rem',
+                    color: 'var(--text-muted)',
+                  }}
+                >
                   B:
                 </label>
                 <input
@@ -190,7 +203,7 @@ const Messenger: Component = () => {
           <div class="card">
             <h2>Code</h2>
             <div class="code-block">
-{`// worker.ts
+              {`// worker.ts
 import { expose } from '@bigmistqke/rpc/messenger'
 
 expose({
@@ -215,7 +228,14 @@ await proxy.math.square(5)  // 25`}
 
         <div>
           <div class="card">
-            <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '1rem' }}>
+            <div
+              style={{
+                display: 'flex',
+                'justify-content': 'space-between',
+                'align-items': 'center',
+                'margin-bottom': '1rem',
+              }}
+            >
               <h2>Output</h2>
               <button
                 class="button"

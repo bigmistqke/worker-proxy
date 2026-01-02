@@ -1,6 +1,7 @@
-import { Component, createSignal, onMount, onCleanup, For } from 'solid-js'
 import { client } from '@bigmistqke/rpc/stream'
-import type { StreamMethods } from '../workers/service.worker'
+import { Component, createSignal, For, onMount } from 'solid-js'
+import type { StreamMethods } from '../../service.worker'
+import { BASE } from '../constants'
 
 interface LogEntry {
   type: 'request' | 'response' | 'error' | 'info'
@@ -22,15 +23,15 @@ const Stream: Component = () => {
     // Register service worker from public folder
     if ('serviceWorker' in navigator) {
       try {
-        await navigator.serviceWorker.register('/service-worker.js', {
-          scope: '/',
+        await navigator.serviceWorker.register(`${BASE}/service-worker.js`, {
+          scope: `${BASE}/`,
         })
         await navigator.serviceWorker.ready
         setReady(true)
         log('info', 'Service Worker ready')
 
         // Connect to stream RPC
-        const { proxy, onClose, closed } = client<StreamMethods>('/stream-rpc', {})
+        const { proxy, onClose, closed } = client<StreamMethods>(`${BASE}/stream-rpc`, {})
         proxyRef = proxy
         setConnected(true)
         log('info', 'Stream RPC connected')
@@ -77,7 +78,11 @@ const Stream: Component = () => {
 
       <div class="status">
         <span class={`status-dot ${connected() ? 'connected' : ''}`} />
-        {connected() ? 'Stream Connected' : ready() ? 'Connecting...' : 'Waiting for Service Worker...'}
+        {connected()
+          ? 'Stream Connected'
+          : ready()
+          ? 'Connecting...'
+          : 'Waiting for Service Worker...'}
       </div>
 
       <div class="demo-section">
@@ -113,7 +118,7 @@ const Stream: Component = () => {
           <div class="card">
             <h2>Code</h2>
             <div class="code-block">
-{`// service-worker.ts
+              {`// service-worker.ts
 import { server, isStreamRequest } from '@bigmistqke/rpc/stream'
 
 const methods = {
@@ -149,7 +154,7 @@ onClose(() => console.log('Stream closed'))`}
           <div class="card">
             <h2>Custom Codec Example</h2>
             <div class="code-block">
-{`import { createStreamCodec, PrimitiveCodec } from '@bigmistqke/rpc/stream'
+              {`import { createStreamCodec, PrimitiveCodec } from '@bigmistqke/rpc/stream'
 
 // Custom codec for Set
 const SetCodec = new StructuralCodec({
@@ -174,7 +179,14 @@ const codec = createStreamCodec([SetCodec])`}
 
         <div>
           <div class="card">
-            <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '1rem' }}>
+            <div
+              style={{
+                display: 'flex',
+                'justify-content': 'space-between',
+                'align-items': 'center',
+                'margin-bottom': '1rem',
+              }}
+            >
               <h2>Output</h2>
               <button
                 class="button"
@@ -191,7 +203,8 @@ const codec = createStreamCodec([SetCodec])`}
                     <span style={{ color: 'var(--text-muted)', 'margin-right': '0.5rem' }}>
                       {new Date(entry.timestamp).toLocaleTimeString()}
                     </span>
-                    {entry.type === 'request' ? '>' : entry.type === 'info' ? '*' : '<'} {entry.message}
+                    {entry.type === 'request' ? '>' : entry.type === 'info' ? '*' : '<'}{' '}
+                    {entry.message}
                   </div>
                 )}
               </For>

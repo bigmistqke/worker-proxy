@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite'
 import solid from 'vite-plugin-solid'
+import { BASE } from "./src/constants"
 
 export default defineConfig({
-  base: 'rpc',
+  base: BASE,
   plugins: [solid()],
   build: {
     target: 'esnext',
