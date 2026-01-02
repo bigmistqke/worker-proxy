@@ -3,6 +3,7 @@
   "scripts": {
     "dev": "pnpm --filter @bigmistqke/rpc-demo dev",
     "build": "pnpm --filter @bigmistqke/rpc build",
+    "build:dev": "pnpm --filter @bigmistqke/rpc-demo build",
     "test": "pnpm --filter @bigmistqke/rpc test"
   },
   "devDependencies": {

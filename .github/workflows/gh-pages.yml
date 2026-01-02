@@ -1,24 +1,20 @@
-name: CI
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches:
       - main
       - next
-  pull_request:
-    branches:
-      - main
-      - next
 
 jobs:
-  test:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install latest corepack
+      - name: install latest corepack
         run: npm install corepack@latest -g
 
       - run: corepack enable
@@ -33,5 +29,12 @@ jobs:
       - name: Build project
         run: pnpm build
 
-      - name: Run tests
-        run: pnpm test
+      - name: Build demo
+        run: pnpm build:dev
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./packages/demo/dist # Adjust if your build output directory is different
+          publish_branch: gh-pages # Specify the branch to deploy to
