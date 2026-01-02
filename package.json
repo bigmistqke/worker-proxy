@@ -1,6 +1,5 @@
 {
   "name": "rpc-workspace",
-  "private": true,
   "scripts": {
     "dev": "pnpm --filter @bigmistqke/rpc-demo dev",
     "build": "pnpm --filter @bigmistqke/rpc build",

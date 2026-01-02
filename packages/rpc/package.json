@@ -26,7 +26,8 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
-    "prepublishOnly": "pnpm run build"
+    "bump": "bumpp",
+    "prepublishOnly": "pnpm build && pnpm bump"
   },
   "license": "MIT",
   "devDependencies": {
@@ -36,6 +37,7 @@
   },
   "dependencies": {
     "@types/node": "^22.15.30",
+    "bumpp": "^10.3.2",
     "valibot": "^1.0.0"
   }
 }
