@@ -6,6 +6,9 @@ on:
       - main
       - next
 
+permissions:
+  contents: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
