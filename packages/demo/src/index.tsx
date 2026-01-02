@@ -1,5 +1,6 @@
 /* @refresh reload */
-import { Route, Router } from '@solidjs/router'
+import { Route, Router, useNavigate } from '@solidjs/router'
+import { onMount, ParentProps } from 'solid-js'
 import { render } from 'solid-js/web'
 import Layout from './App'
 import { BASE } from './constants'
@@ -10,9 +11,25 @@ import SSE from './pages/SSE'
 import Stream from './pages/Stream'
 import './styles.css'
 
+function RedirectHandler(props: ParentProps) {
+  const navigate = useNavigate()
+
+  onMount(() => {
+    const redirect = sessionStorage.getItem('redirect')
+    if (redirect) {
+      sessionStorage.removeItem('redirect')
+      // Extract path relative to BASE
+      const path = redirect.replace(BASE, '/') || '/'
+      navigate(path, { replace: true })
+    }
+  })
+
+  return props.children
+}
+
 render(
   () => (
-    <Router base={BASE} root={Layout}>
+    <Router base={BASE} root={(props) => <RedirectHandler><Layout {...props} /></RedirectHandler>}>
       <Route path="/" component={Home} />
       <Route path="messenger" component={Messenger} />
       <Route path="fetch" component={Fetch} />
