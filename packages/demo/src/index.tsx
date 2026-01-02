@@ -15,12 +15,12 @@ function RedirectHandler(props: ParentProps) {
   const navigate = useNavigate()
 
   onMount(() => {
-    const redirect = sessionStorage.getItem('redirect')
+    const params = new URLSearchParams(location.search)
+    const redirect = params.get('redirect')
     if (redirect) {
-      sessionStorage.removeItem('redirect')
-      // Extract path relative to BASE
-      const path = redirect.replace(BASE, '/') || '/'
-      navigate(path, { replace: true })
+      // Clean URL and navigate
+      history.replaceState(null, '', location.pathname)
+      navigate(redirect, { replace: true })
     }
   })
 
