@@ -1,0 +1,41 @@
+{
+  "name": "@bigmistqke/rpc",
+  "version": "0.0.13",
+  "type": "module",
+  "description": "RPC toolkit for type-safe communication across Workers, iframes, and network boundaries.",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./messenger": {
+      "import": "./dist/messenger.js",
+      "types": "./dist/messenger.d.ts"
+    },
+    "./stream": {
+      "import": "./dist/stream/index.js",
+      "types": "./dist/stream/index.d.ts"
+    },
+    "./fetch": {
+      "import": "./dist/fetch/index.js",
+      "types": "./dist/fetch/index.d.ts"
+    },
+    "./fetch/node": {
+      "import": "./dist/fetch/node.js",
+      "types": "./dist/fetch/node.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "6.6.3",
+    "typescript": "^5.7.2",
+    "vitest": "0.28.5"
+  },
+  "dependencies": {
+    "@types/node": "^22.15.30",
+    "valibot": "^1.0.0"
+  }
+}

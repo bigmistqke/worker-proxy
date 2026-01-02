@@ -1,46 +1,12 @@
 {
-  "name": "@bigmistqke/rpc",
-  "version": "0.0.13",
-  "type": "module",
-  "description": "RPC toolkit.",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    "./messenger": {
-      "import": "./dist/messenger.js",
-      "types": "./dist/messenger.d.ts"
-    },
-    "./stream": {
-      "import": "./dist/stream/index.js",
-      "types": "./dist/stream/index.d.ts"
-    },
-    "./fetch": {
-      "import": "./dist/fetch/index.js",
-      "types": "./dist/fetch/index.d.ts"
-    },
-    "./fetch/node": {
-      "import": "./dist/fetch/node.js",
-      "types": "./dist/fetch/node.d.ts"
-    }
-  },
+  "name": "rpc-workspace",
+  "private": true,
   "scripts": {
-    "dev": "vite",
-    "build": "tsup",
-    "test": "vitest run",
-    "prepublishOnly": "pnpm run build"
+    "dev": "pnpm --filter @bigmistqke/rpc-demo dev",
+    "build": "pnpm --filter @bigmistqke/rpc build",
+    "test": "pnpm --filter @bigmistqke/rpc test"
   },
-  "license": "MIT",
   "devDependencies": {
-    "prettier": "2.8.4",
-    "tsup": "6.6.3",
-    "typescript": "^5.7.2",
-    "vite": "^6.3.5",
-    "vite-plugin-mkcert": "^1.17.8",
-    "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "0.28.5"
-  },
-  "dependencies": {
-    "@types/node": "^22.15.30",
-    "valibot": "^1.0.0"
+    "prettier": "2.8.4"
   }
 }
