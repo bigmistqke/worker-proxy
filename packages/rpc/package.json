@@ -1,6 +1,6 @@
 {
   "name": "@bigmistqke/rpc",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "RPC toolkit for type-safe communication across Workers, iframes, and network boundaries.",
   "module": "./dist/index.js",
@@ -27,7 +27,7 @@
     "build": "tsup",
     "test": "vitest run",
     "bump": "bumpp",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm test && pnpm build"
   },
   "license": "MIT",
   "devDependencies": {
