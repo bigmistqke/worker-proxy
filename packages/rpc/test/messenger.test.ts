@@ -7,6 +7,9 @@ import {
   $MESSENGER_RPC_REQUEST,
 } from '../src/message-protocol'
 
+// Helper to flush pending promises
+const flushPromises = () => new Promise(resolve => setTimeout(resolve, 0))
+
 // Mock MessagePort
 function createMockMessagePort() {
   const handlers: Array<(event: MessageEvent) => void> = []
@@ -55,6 +58,8 @@ describe('createResponder', () => {
       payload: { test: 'data' },
     })
 
+    await flushPromises()
+
     expect(callback).toHaveBeenCalledWith({
       [$MESSENGER_REQUEST]: 1,
       payload: { test: 'data' },
@@ -69,7 +74,7 @@ describe('createResponder', () => {
     )
   })
 
-  it('should send error response when callback throws', () => {
+  it('should send error response when callback throws', async () => {
     const port = createMockMessagePort()
     const error = new Error('test error')
     const callback = vi.fn().mockImplementation(() => {
@@ -82,6 +87,8 @@ describe('createResponder', () => {
       [$MESSENGER_REQUEST]: 1,
       payload: {},
     })
+
+    await flushPromises()
 
     expect(port.postMessage).toHaveBeenCalledWith(
       {
@@ -114,7 +121,7 @@ describe('createResponder', () => {
 })
 
 describe('expose', () => {
-  it('should handle RPC requests and call methods', () => {
+  it('should handle RPC requests and call methods', async () => {
     const port = createMockMessagePort()
     const methods = {
       greet: (name: string) => `Hello, ${name}!`,
@@ -131,6 +138,8 @@ describe('expose', () => {
       },
     })
 
+    await flushPromises()
+
     expect(port.postMessage).toHaveBeenCalledWith(
       {
         [$MESSENGER_RESPONSE]: 1,
@@ -140,7 +149,7 @@ describe('expose', () => {
     )
   })
 
-  it('should handle nested method calls', () => {
+  it('should handle nested method calls', async () => {
     const port = createMockMessagePort()
     const methods = {
       user: {
@@ -160,6 +169,8 @@ describe('expose', () => {
         args: [],
       },
     })
+
+    await flushPromises()
 
     expect(port.postMessage).toHaveBeenCalledWith(
       {
@@ -268,7 +279,7 @@ describe('rpc', () => {
 })
 
 describe('Window vs Worker handling', () => {
-  it('should use targetOrigin "*" for Window-like objects', () => {
+  it('should use targetOrigin "*" for Window-like objects', async () => {
     const windowLike = {
       postMessage: vi.fn(),
       addEventListener: vi.fn(),
@@ -288,6 +299,8 @@ describe('Window vs Worker handling', () => {
       },
     } as MessageEvent)
 
+    await flushPromises()
+
     // Window-style postMessage should include '*' as second argument
     expect(windowLike.postMessage).toHaveBeenCalledWith(
       expect.any(Object),
@@ -296,7 +309,7 @@ describe('Window vs Worker handling', () => {
     )
   })
 
-  it('should not use targetOrigin for Worker-like objects', () => {
+  it('should not use targetOrigin for Worker-like objects', async () => {
     const workerLike = createMockMessagePort()
 
     expose({ test: () => 'ok' }, { to: workerLike })
@@ -309,6 +322,8 @@ describe('Window vs Worker handling', () => {
         args: [],
       },
     })
+
+    await flushPromises()
 
     // Worker-style postMessage is called with (message, transferables)
     expect(workerLike.postMessage).toHaveBeenCalledWith(expect.any(Object), undefined)
