@@ -110,11 +110,12 @@ export function createResponder(
 
   messenger.addEventListener(
     'message',
-    event => {
+    async event => {
       const data = (event as MessageEvent).data
       if (RequestShape.validate(data)) {
         try {
-          postMessage(ResponseShape.create(data, callback(data)))
+          const result = await callback(data)
+          postMessage(ResponseShape.create(data, result))
         } catch (error) {
           postMessage(ErrorShape.create(data, error))
         }
